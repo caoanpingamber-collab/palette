@@ -142,7 +142,8 @@
         <span class="lbl">颜色数</span>
         <span id="kbtns" class="seg"></span>
         <button id="copyjson" class="btn pillbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M8 8l-4 4 4 4M16 8l4 4-4 4"/></svg>复制 JSON</button>
-        <button id="dljson" class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 4v11M8 11l4 4 4-4M5 20h14"/></svg>下载</button>
+        <button id="dljson" class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 4v11M8 11l4 4 4-4M5 20h14"/></svg>下载 JSON</button>
+        <button id="dlpng" class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 15l5-4 4 3 3-2 6 4"/><circle cx="8.5" cy="9" r="1.3"/></svg>下载 PNG</button>
         <span id="toast" class="toast"></span>
       </div>
       <div id="bar" class="bar"></div>
@@ -234,6 +235,34 @@
   rows.addEventListener('click',function(e){var c=e.target.closest('.cp');if(c){cp(c.getAttribute('data-c'));return;}var ch=e.target.closest('.chip');if(ch)cp(ch.getAttribute('data-c'));});
   $('copyjson').onclick=function(){cp(JSON.stringify(palette,null,2));};
   $('dljson').onclick=function(){var blob=new Blob([JSON.stringify(palette,null,2)],{type:'application/json'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='palette.json';a.click();URL.revokeObjectURL(a.href);};
+
+  function rr(x,X,Y,W,H,Rr){x.beginPath();x.moveTo(X+Rr,Y);x.arcTo(X+W,Y,X+W,Y+H,Rr);x.arcTo(X+W,Y+H,X,Y+H,Rr);x.arcTo(X,Y+H,X,Y,Rr);x.arcTo(X,Y,X+W,Y,Rr);x.closePath();}
+  function exportPNG(){if(!palette.length)return;var dark=document.documentElement.getAttribute('data-theme')==='dark';
+    var C=dark?{bg:'#161618',text:'#F4F4F5',muted:'#9A9AA2',faint:'#6E6E76',border:'rgba(255,255,255,.10)',card:'rgba(255,255,255,.05)'}:{bg:'#FFFFFF',text:'#18181B',muted:'#6B7280',faint:'#9CA3AF',border:'rgba(0,0,0,.09)',card:'#F4F4F6'};
+    var s=2,W=900,P=40,cw=W-2*P,barH=24,afterBar=30,rowH=128,coldGap=26,coldH=104,n=palette.length;
+    var Hh=P+barH+afterBar+n*rowH+coldGap+coldH+P;
+    var cv=document.createElement('canvas');cv.width=W*s;cv.height=Hh*s;var x=cv.getContext('2d');x.scale(s,s);
+    x.fillStyle=C.bg;x.fillRect(0,0,W,Hh);
+    var tot=clusters.reduce(function(a,c){return a+c.count;},0);
+    x.save();rr(x,P,P,cw,barH,12);x.clip();var bx=P;clusters.forEach(function(c){var w=c.count/tot*cw;x.fillStyle=hx(c.rgb[0],c.rgb[1],c.rgb[2]);x.fillRect(bx,P,Math.ceil(w)+1,barH);bx+=w;});x.restore();
+    function dv(vx,vy,l,v){x.textBaseline='middle';x.textAlign='left';x.font='500 13px Inter,sans-serif';x.fillStyle=C.faint;x.fillText(l,vx,vy);x.font='400 15px "JetBrains Mono",monospace';x.fillStyle=C.text;x.fillText(v,vx+44,vy);}
+    var y0=P+barH+afterBar;
+    palette.forEach(function(p,i){var ry=y0+i*rowH;if(i>0){x.strokeStyle=C.border;x.lineWidth=1;x.beginPath();x.moveTo(P,ry+0.5);x.lineTo(P+cw,ry+0.5);x.stroke();}
+      var chipY=ry+(rowH-96)/2;rr(x,P,chipY,96,96,16);x.fillStyle=p.hex;x.fill();
+      var lm=.2126*p.rgb[0]+.7152*p.rgb[1]+.0722*p.rgb[2];x.fillStyle=lm>150?'#0C0C0E':'#fff';x.font='500 19px "JetBrains Mono",monospace';x.textAlign='left';x.textBaseline='alphabetic';x.fillText(p.ratio.toFixed(1)+'%',P+10,chipY+96-12);
+      var vx1=P+96+30,vx2=vx1+360,cy=ry+rowH/2;
+      dv(vx1,cy-18,'HEX',p.hex);dv(vx2,cy-18,'RGB',p.rgb.join(', '));dv(vx1,cy+18,'HSB',p.hsb[0]+'°, '+p.hsb[1]+'%, '+p.hsb[2]+'%');dv(vx2,cy+18,'HSL',p.hsl[0]+'°, '+p.hsl[1]+'%, '+p.hsl[2]+'%');});
+    var coldY=y0+n*rowH+coldGap;rr(x,P,coldY,cw,coldH,16);x.fillStyle=C.card;x.fill();
+    x.textAlign='left';x.textBaseline='alphabetic';x.font='400 13px Inter,sans-serif';x.fillStyle=C.muted;x.fillText('冷色占比',P+24,coldY+34);
+    var lo=+hmin.value,hi=+hmax.value,cold=0;clusters.forEach(function(c){var h=rgb2hsl(c.rgb[0],c.rgb[1],c.rgb[2]);if(h[0]>=lo&&h[0]<=hi&&h[1]>12)cold+=c.count/tot*100;});
+    x.font='500 32px "JetBrains Mono",monospace';x.fillStyle=C.text;x.fillText(cold.toFixed(1)+'%',P+24,coldY+76);
+    var ok=cold>=60,pt=ok?'达标 ≥60%':'未达标 <60%';x.font='500 13px Inter,sans-serif';var pw=x.measureText(pt).width+26,pxx=P+184,pyy=coldY+coldH/2-15;
+    rr(x,pxx,pyy,pw,30,15);x.fillStyle=ok?(dark?'rgba(16,185,129,.18)':'#DCFCE7'):(dark?'rgba(236,72,153,.18)':'#FCE7F3');x.fill();
+    x.fillStyle=ok?'#10B981':'#EC4899';x.textBaseline='middle';x.fillText(pt,pxx+13,pyy+16);
+    x.font='400 13px Inter,sans-serif';x.fillStyle=C.muted;x.fillText('hue '+lo+'–'+hi+'°',pxx+pw+22,pyy+16);
+    x.textAlign='right';x.textBaseline='alphabetic';x.font='400 12px Inter,sans-serif';x.fillStyle=C.faint;x.fillText('Palette',P+cw,coldY+coldH-14);
+    cv.toBlob(function(b){var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='palette.png';a.click();URL.revokeObjectURL(a.href);flash('PNG 已下载');},'image/png');}
+  $('dlpng').onclick=exportPNG;
 
   function load(src){var img=new Image();img.onload=function(){lastImg=img;thumb.src=src;process(img);};img.src=src;}
   function handle(f){if(!f||!/^image\//.test(f.type))return;var rd=new FileReader();rd.onload=function(ev){load(ev.target.result);};rd.readAsDataURL(f);}
