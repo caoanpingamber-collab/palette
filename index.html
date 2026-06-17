@@ -111,6 +111,55 @@
   .feat p{font-size:12.5px;color:var(--text-muted);margin-top:4px;}
   footer{text-align:center;margin-top:42px;font-size:12.5px;color:var(--text-faint);}
   @media(max-width:680px){h1{font-size:40px;}.feats{grid-template-columns:1fr;}.vals{grid-template-columns:1fr 1fr;}}
+
+  /* ===== Banner 体检 ===== */
+  .bn{margin-top:30px;display:none;}
+  .bn.on{display:block;animation:rise .5s var(--ease);}
+  .bn-head{font-family:var(--display);font-weight:700;font-size:20px;}
+  .bn-sub{font-size:13px;color:var(--text-muted);margin:5px 0 18px;}
+  .bn-grid{display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start;}
+  .bn-phone-wrap{width:320px;height:694px;flex:0 0 auto;border-radius:24px;overflow:hidden;border:1px solid var(--border);background:#cfe7f0;position:relative;box-shadow:var(--glow-blue);}
+  .bn-phone{position:absolute;top:0;left:0;width:393px;height:852px;transform:scale(.8142);transform-origin:top left;}
+  .bn-phone>*{position:absolute;}
+  .bn-banner{top:0;left:0;width:393px;height:636px;object-fit:cover;}
+  .bn-fixed2{top:365px;left:0;width:393px;height:487px;background:#fff;background-size:393px 487px;background-repeat:no-repeat;}
+  .bn-fixed1{top:0;left:0;width:393px;height:98px;background-size:393px 98px;background-repeat:no-repeat;}
+  .bn-title{top:189px;left:0;width:393px;padding:0 18px;box-sizing:border-box;}
+  .bn-title .s{font-size:14px;font-weight:700;color:rgba(255,255,255,.8);line-height:1.3;}
+  .bn-title .t{display:flex;align-items:center;gap:4px;margin-top:2px;}
+  .bn-title .t b{font-size:22px;font-weight:700;color:#fff;line-height:1.25;white-space:nowrap;}
+  .bn-title .chev{width:14px;height:20px;border-radius:4px;background:rgba(255,255,255,.2);border:.5px solid rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;}
+  .bn-cards{top:245px;left:0;width:393px;height:120px;}
+  .bn-card{position:absolute;top:8px;height:112px;border-radius:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:#0c0c0e;
+    background-image:linear-gradient(rgba(255,255,255,.6),rgba(255,255,255,.6)),linear-gradient(180deg,var(--cv) 0%,rgba(255,255,255,.75) 100%);}
+  .bn-card.v{left:16px;width:222px;}
+  .bn-card.i{left:246px;width:131px;}
+  .bn-card span{font-size:15px;font-weight:600;}
+  .bn-anno{top:0;left:0;width:393px;height:852px;pointer-events:none;}
+  .bn-r{position:absolute;border:1.5px solid;border-radius:3px;}
+  .bn-gold{position:absolute;top:0;height:636px;border-left:1.5px dashed #FFD60A;}
+  .bn-dot{position:absolute;width:14px;height:14px;border-radius:50%;border:2px solid #fff;transform:translate(-50%,-50%);box-shadow:0 0 0 2px rgba(0,0,0,.45);}
+  .bn-list{flex:1;min-width:280px;display:flex;flex-direction:column;gap:10px;}
+  .bn-chk{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:13px 16px;backdrop-filter:var(--glass-blur);}
+  .bn-chk-h{display:flex;align-items:center;gap:10px;margin-bottom:7px;}
+  .bn-chk-h .nm{font-weight:600;font-size:14px;flex:1;}
+  .bn-chk-v{font-family:var(--mono);font-size:12.5px;color:var(--text-muted);line-height:1.7;}
+  .bn-sw{width:15px;height:15px;border-radius:4px;border:1px solid var(--border);display:inline-block;vertical-align:-3px;margin-right:3px;}
+  .bn-warn{background:var(--bad-bg);color:var(--bad-fg);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px 16px;font-size:13px;}
+
+  .bn-fixed1{display:flex;align-items:flex-start;justify-content:space-between;padding:14px 22px 0;box-sizing:border-box;background:none;}
+  .bn-fixed1 .tm{font-weight:600;font-size:15px;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.35);}
+  .bn-fixed1 .ic{display:flex;gap:4px;align-items:center;margin-top:4px;}
+  .bn-fixed1 .ic i{width:16px;height:11px;border-radius:2px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3);display:block;}
+  .bn-fixed1 .ic i.s{width:18px;}
+  .bn-fixed2{padding:18px 16px;box-sizing:border-box;}
+  .bn-tpl{display:flex;gap:10px;margin-bottom:20px;}
+  .bn-tpl i{flex:1;height:96px;border-radius:12px;background:linear-gradient(135deg,#dde5ee,#eef2f6);display:block;}
+  .bn-ph-h{height:14px;width:120px;border-radius:7px;background:#e6e9ee;margin-bottom:18px;}
+  .bn-tools{display:grid;grid-template-columns:repeat(3,1fr);row-gap:20px;}
+  .bn-tools span{display:flex;flex-direction:column;align-items:center;gap:8px;}
+  .bn-tools span i{width:30px;height:30px;border-radius:9px;background:#e6e9ee;display:block;}
+  .bn-tools span u{width:54px;height:9px;border-radius:5px;background:#eceef2;display:block;}
 </style>
 </head>
 <body>
@@ -160,6 +209,12 @@
         </div>
       </div>
     </div>
+  </section>
+
+  <section id="bn" class="bn">
+    <div class="bn-head">Banner 体检</div>
+    <div class="bn-sub">把素材放进真实首页样式预览，并自动查标题/卡片对比度与主体构图（需 800×1296）。</div>
+    <div id="bn-body"></div>
   </section>
 
   <div class="feats">
@@ -264,7 +319,59 @@
     cv.toBlob(function(b){var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='palette.png';a.click();URL.revokeObjectURL(a.href);flash('PNG 已下载');},'image/png');}
   $('dlpng').onclick=exportPNG;
 
-  function load(src){var img=new Image();img.onload=function(){lastImg=img;thumb.src=src;process(img);};img.src=src;}
+  // ===== Banner 体检 =====
+  var chevSvg='<svg viewBox="0 0 14 14" width="8" height="10" fill="none" stroke="#fff" stroke-width="2"><path d="M5 3l4 4-4 4"/></svg>';
+  var playSvg='<svg viewBox="0 0 28 28"><rect width="28" height="28" rx="8" fill="#0c0c0e"/><path d="M11 9l9 5-9 5z" fill="#fff"/></svg>';
+  var imgSvg='<svg viewBox="0 0 28 28"><rect width="28" height="28" rx="8" fill="#0c0c0e"/><path d="M7 19l4-4 3 2 4-5 3 7z" fill="#fff"/><circle cx="10" cy="10" r="1.6" fill="#fff"/></svg>';
+  var bnEl=document.getElementById('bn'),bnBody=document.getElementById('bn-body');
+  function hsb2rgb(h,s,v){s/=100;v/=100;var c=v*s,x=c*(1-Math.abs((h/60)%2-1)),m=v-c,r,g,b;if(h<60){r=c;g=x;b=0;}else if(h<120){r=x;g=c;b=0;}else if(h<180){r=0;g=c;b=x;}else if(h<240){r=0;g=x;b=c;}else if(h<300){r=x;g=0;b=c;}else{r=c;g=0;b=x;}return [R((r+m)*255),R((g+m)*255),R((b+m)*255)];}
+  function relL(c){var s=[c[0],c[1],c[2]].map(function(v){v/=255;return v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4);});return .2126*s[0]+.7152*s[1]+.0722*s[2];}
+  function contrast(a,b){var la=relL(a),lb=relL(b),hi=Math.max(la,lb),lo=Math.min(la,lb);return (hi+.05)/(lo+.05);}
+  function over(t,b){var a=t[3];return [R(t[0]*a+b[0]*(1-a)),R(t[1]*a+b[1]*(1-a)),R(t[2]*a+b[2]*(1-a))];}
+  function rgbcss(c){return 'rgb('+c[0]+','+c[1]+','+c[2]+')';}
+  function runBannerCheck(img,src){
+    bnEl.classList.add('on');
+    if(img.naturalWidth!==800||img.naturalHeight!==1296){
+      bnBody.innerHTML='<div class="bn-warn">需要 800×1296px 的 banner 素材；当前是 '+img.naturalWidth+'×'+img.naturalHeight+'px。按规范导出 @3x 后再传即可体检。</div>';return;}
+    var cw=400,ch=648,cv=document.createElement('canvas');cv.width=cw;cv.height=ch;
+    var ctx=cv.getContext('2d',{willReadFrequently:true});ctx.drawImage(img,0,0,cw,ch);
+    var data=ctx.getImageData(0,0,cw,ch).data,fx=cw/393,fy=ch/636;
+    function px(a,b,c,d){return [a*fx,b*fy,c*fx,d*fy];}
+    function avg(rx){var x0=Math.max(0,rx[0]|0),y0=Math.max(0,rx[1]|0),x1=Math.min(cw,rx[2]|0),y1=Math.min(ch,rx[3]|0),Rr=0,G=0,B=0,n=0;for(var y=y0;y<y1;y++)for(var x=x0;x<x1;x++){var i=(y*cw+x)*4;Rr+=data[i];G+=data[i+1];B+=data[i+2];n++;}return n?[R(Rr/n),R(G/n),R(B/n)]:[128,128,128];}
+    function dom(rx){var x0=Math.max(0,rx[0]|0),y0=Math.max(0,rx[1]|0),x1=Math.min(cw,rx[2]|0),y1=Math.min(ch,rx[3]|0),pts=[];for(var y=y0;y<y1;y++)for(var x=x0;x<x1;x++){var i=(y*cw+x)*4;if(data[i+3]<125)continue;pts.push([data[i],data[i+1],data[i+2]]);}var cl=kmeans(pts,5,mulberry32(0x9e3779b9)).sort(function(a,b){return b.count-a.count;});return cl.length?cl[0].rgb:[128,128,128];}
+    var domc=dom(px(0,0,393,250)),vh=rgb2hsb(domc[0],domc[1],domc[2])[0],V=hsb2rgb(vh,25,100);
+    var Bt=avg(px(16,189,377,245)),B2=avg(px(16,247,377,262)),B3=avg(px(16,348,377,363)),white=[255,255,255];
+    var cardTop=over([255,255,255,.6],over([V[0],V[1],V[2],.8],B2)),cardBot=over([255,255,255,.6],over([255,255,255,.75],B3));
+    var c1=contrast(white,Bt),c2=contrast(cardTop,B2),c3=contrast(cardBot,B3);
+    var sx=0,sy=0,sw=0;for(var y=1;y<ch-1;y++)for(var x=1;x<cw-1;x++){var i=(y*cw+x)*4,ir=i+4,id=i+cw*4,w=Math.abs(data[i]-data[ir])+Math.abs(data[i+1]-data[ir+1])+Math.abs(data[i+2]-data[ir+2])+Math.abs(data[i]-data[id])+Math.abs(data[i+1]-data[id+1])+Math.abs(data[i+2]-data[id+2]);sx+=x*w;sy+=y*w;sw+=w;}
+    var cxf=sw?sx/sw/cw:.5,cyf=sw?sy/sw/ch:.5;
+    renderBanner(src,V,[
+      {n:'① 标题对比度',pass:c1>=3,val:c1.toFixed(2)+':1（需 ≥3）',sw:[['白字',white],['背景',Bt]]},
+      {n:'② 卡片上缘',pass:c2>=3,val:c2.toFixed(2)+':1（需 ≥3）',sw:[['卡片顶',cardTop],['背景',B2]]},
+      {n:'③ 卡片下缘',pass:c3>=2,val:c3.toFixed(2)+':1（需 ≥2）',sw:[['卡片底',cardBot],['背景',B3]]},
+      {n:'④ 主体居右',pass:cxf>=.618,val:'视觉重心 x = '+R(cxf*100)+'%（需 ≥61.8% 黄金分割线）',sw:[]}
+    ],{cxf:cxf,cyf:cyf});
+  }
+  function renderBanner(src,V,checks,ex){
+    function rect(x,y,w,h,col){return '<div class="bn-r" style="left:'+x+'px;top:'+y+'px;width:'+w+'px;height:'+h+'px;border-color:'+col+'"></div>';}
+    var anno=rect(150,38,243,205,'#22C55E')+rect(0,0,393,250,'rgba(139,92,246,.75)')+rect(16,189,361,56,'#F59E0B')+rect(16,245,361,17,'#3B82F6')+rect(16,348,361,17,'#EC4899')
+      +'<div class="bn-gold" style="left:'+R(393*.618)+'px"></div>'
+      +'<div class="bn-dot" style="left:'+(ex.cxf*393)+'px;top:'+(ex.cyf*636)+'px;background:'+(ex.cxf>=.618?'#22C55E':'#EC4899')+'"></div>';
+    var cvar='rgba('+V[0]+','+V[1]+','+V[2]+',.8)';
+    var phone='<div class="bn-phone-wrap"><div class="bn-phone">'
+      +'<img class="bn-banner" src="'+src+'">'
+      +'<div class="bn-fixed2"><div class="bn-tpl"><i></i><i></i><i></i><i></i></div><div class="bn-ph-h"></div><div class="bn-tools"><span><i></i><u></u></span><span><i></i><u></u></span><span><i></i><u></u></span><span><i></i><u></u></span><span><i></i><u></u></span><span><i></i><u></u></span><span><i></i><u></u></span><span><i></i><u></u></span><span><i></i><u></u></span><span><i></i><u></u></span><span><i></i><u></u></span><span><i></i><u></u></span></div></div>'
+      +'<div class="bn-title"><div class="s">subtitle caption</div><div class="t"><b>One main banner title</b><span class="chev">'+chevSvg+'</span></div></div>'
+      +'<div class="bn-cards"><div class="bn-card v" style="--cv:'+cvar+'">'+playSvg+'<span>New video</span></div><div class="bn-card i" style="--cv:'+cvar+'">'+imgSvg+'<span>New image</span></div></div>'
+      +'<div class="bn-fixed1"><span class="tm">9:41</span><span class="ic"><i></i><i></i><i class="s"></i></span></div>'
+      +'<div class="bn-anno">'+anno+'</div></div></div>';
+    var list='<div class="bn-list">';
+    checks.forEach(function(c){var sws=c.sw.map(function(s){return '<span class="bn-sw" style="background:'+rgbcss(s[1])+'"></span>'+s[0];}).join(' &nbsp; ');
+      list+='<div class="bn-chk"><div class="bn-chk-h"><span class="nm">'+c.n+'</span><span class="status" style="background:'+(c.pass?'var(--ok-bg)':'var(--bad-bg)')+';color:'+(c.pass?'var(--ok-fg)':'var(--bad-fg)')+'">'+(c.pass?'通过':'不通过')+'</span></div><div class="bn-chk-v">'+c.val+(sws?'<br>'+sws:'')+'</div></div>';});
+    list+='<div class="bn-chk"><div class="bn-chk-v">卡片变量色 V = <span class="bn-sw" style="background:'+rgbcss(V)+'"></span>'+hx(V[0],V[1],V[2])+'<br>取色区域(顶250/636)主色 → 保色相 / S25 / B100</div></div></div>';
+    bnBody.innerHTML='<div class="bn-grid">'+phone+list+'</div>';
+  }
+  function load(src){var img=new Image();img.onload=function(){lastImg=img;thumb.src=src;process(img);runBannerCheck(img,src);};img.src=src;}
   function handle(f){if(!f||!/^image\//.test(f.type))return;var rd=new FileReader();rd.onload=function(ev){load(ev.target.result);};rd.readAsDataURL(f);}
   drop.onclick=function(){file.click();};thumb.onclick=function(){file.click();};
   file.onchange=function(e){handle(e.target.files[0]);};
