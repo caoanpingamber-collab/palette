@@ -147,7 +147,8 @@ function loadImage(src) {
 
 function animatedStrength(now, min, max, duration) {
   const progress = (now % duration) / duration
-  return min + (max - min) * (0.5 - 0.5 * Math.cos(progress * Math.PI * 2))
+  const linearProgress = progress < 0.5 ? progress * 2 : (1 - progress) * 2
+  return min + (max - min) * linearProgress
 }
 
 export default function PatternRefraction({
