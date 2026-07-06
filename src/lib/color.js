@@ -6,6 +6,16 @@ const CONTRAST_LIMITS = {
   cardTop: 2,
   cardBottom: 1.5,
 }
+const CARD_HUE_MIN = 160
+const CARD_HUE_MAX = 270
+const DEFAULT_CARD_HUE = 206
+
+export function calibrateCardHue(h) {
+  if (!Number.isFinite(h)) return DEFAULT_CARD_HUE
+  if (h < CARD_HUE_MIN) return CARD_HUE_MIN
+  if (h > CARD_HUE_MAX) return CARD_HUE_MAX
+  return h
+}
 
 export function rgb2hsl(r, g, b) {
   r /= 255; g /= 255; b /= 255
@@ -159,7 +169,7 @@ export function bannerCheck(img) {
     const cl = kmeans(pts, 5, mulberry32(0x9e3779b9)).sort((a, b) => b.count - a.count)
     return cl.length ? cl[0].rgb : [128, 128, 128]
   }
-  const domc = dom(px(0, 0, 393, 250)), vh = rgb2hsb(domc[0], domc[1], domc[2])[0], V = hsb2rgb(vh, 25, 100)
+  const domc = dom(px(0, 0, 393, 250)), rawHue = rgb2hsb(domc[0], domc[1], domc[2])[0], vh = calibrateCardHue(rawHue), V = hsb2rgb(vh, 25, 100)
   const Bt = avg(px(16, 189, 377, 245)), B2 = avg(px(16, 247, 377, 262)), B3 = avg(px(16, 348, 377, 363)), white = [255, 255, 255]
   const cardTop = over([255, 255, 255, 0.6], over([V[0], V[1], V[2], 0.8], B2)), cardBot = over([255, 255, 255, 0.6], over([255, 255, 255, 0.75], B3))
   const c1 = contrast(white, Bt), c2 = contrast(cardTop, B2), c3 = contrast(cardBot, B3)

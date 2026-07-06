@@ -3,6 +3,10 @@ import { IC_VIDEO, IC_IMAGE } from '../lib/assets'
 
 const assetUrl = (name) => `${import.meta.env.BASE_URL}${name}`
 const figmaAssetUrl = (name) => `${import.meta.env.BASE_URL}figma-assets/${name}`
+const safeRgb = (rgb = [191, 227, 255]) => {
+  const [r, g, b] = rgb
+  return [r, g, b].every((value) => Number.isFinite(value)) ? [r, g, b] : [191, 227, 255]
+}
 
 function drawBlurredBanner({ canvas, src, video, blurPx = 50, darken = 0.08 }) {
   if (!canvas) return
@@ -47,8 +51,10 @@ function drawBlurredBanner({ canvas, src, video, blurPx = 50, darken = 0.08 }) {
 export default function Preview({ src, video = null, V = [191, 227, 255] }) {
   const blurCanvasRef = useRef(null)
   const RECT = { x: 0, y: 0, w: 393, h: 637 }
-  const cvar = `rgba(${V[0]},${V[1]},${V[2]},.8)`
+  const tint = safeRgb(V)
+  const cvar = `rgba(${tint[0]},${tint[1]},${tint[2]},.8)`
   const cardBg = {
+    backgroundColor: cvar,
     backgroundImage:
       `linear-gradient(rgba(255,255,255,.6),rgba(255,255,255,.6)),linear-gradient(180deg, ${cvar} 0%, rgba(255,255,255,.75) 100%)`,
   }

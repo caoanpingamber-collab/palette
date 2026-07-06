@@ -48,7 +48,9 @@ if (fs.existsSync(figmaAssetsDir)) {
     const uri = dataUri(path.join(figmaAssetsDir, fileName))
     const escaped = fileName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     const assetRe = new RegExp(`(["'])(?:/app/[^/]+/)?figma-assets/${escaped}\\1`, 'g')
+    const dynamicAssetCallRe = new RegExp(`\\b[$A-Z_a-z][$\\w]*\\((["'\`])${escaped}\\1\\)`, 'g')
     js = js.replace(assetRe, (_match, quote) => `${quote}${uri}${quote}`)
+    js = js.replace(dynamicAssetCallRe, JSON.stringify(uri))
   }
 }
 

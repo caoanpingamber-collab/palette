@@ -1,15 +1,20 @@
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Preview from './Preview'
+import { PreviewPage2Frame } from './PreviewPage2'
+import { PreviewPage3Frame } from './PreviewPage3'
 import { currentFrame } from '../lib/analysis'
 import { FIGMA_ASSETS } from '../lib/figmaAssets'
 import { gsap, useGSAP } from '../lib/gsap'
+
+const PREVIEW_SIZE = { width: 320, height: 694 }
+const LAST_PREVIEW_INDEX = 2
 
 function CloseIcon() {
   return <img src={FIGMA_ASSETS.close} alt="" className="size-6" />
 }
 
 function ArrowIcon({ dir = 'right' }) {
-  return <img src={dir === 'left' ? FIGMA_ASSETS.arrowLeft : FIGMA_ASSETS.arrowRight} alt="" className="size-10" />
+  return <img src={FIGMA_ASSETS.arrowRight} alt="" className={`size-10 ${dir === 'left' ? 'rotate-180' : ''}`} />
 }
 
 function Logo() {
@@ -176,26 +181,39 @@ function IssueMarkers({ frame, overallPass }) {
   }
   return (
     <div className="pointer-events-none absolute inset-0">
-      {frame.failed.slice(0, 4).map((item, index) => (
-        <div
-          key={item.key}
-          className={`issue-marker absolute flex items-center gap-1 will-change-transform ${positions[item.key] || 'left-[-34px] top-[120px]'}`}
-        >
-          {item.key !== 'chroma' && (
-            <span className="grid size-5 place-items-center rounded-full bg-white font-['Floane'] text-[13px] font-bold text-[#ff3436]">
-              {index + 1}
-            </span>
-          )}
+      {frame.failed.slice(0, 4).map((item, index) => {
+        const position = positions[item.key] || 'left-[-34px] top-[120px]'
+        const isLeftMarker = position.startsWith('left-')
+        const numberNode = (
+          <span className="grid size-5 place-items-center rounded-full bg-white font-['Floane'] text-[13px] font-bold text-[#ff3436]">
+            {index + 1}
+          </span>
+        )
+        const labelNode = (
           <span className="rounded-full bg-white px-2 py-px text-[12px] font-medium leading-5 text-[#ff3436] shadow-sm">
             {item.issue}
           </span>
-          {item.key === 'chroma' && (
-            <span className="grid size-5 place-items-center rounded-full bg-white font-['Floane'] text-[13px] font-bold text-[#ff3436]">
-              {index + 1}
-            </span>
-          )}
-        </div>
-      ))}
+        )
+
+        return (
+          <div
+            key={item.key}
+            className={`issue-marker absolute flex items-center gap-1 will-change-transform ${position}`}
+          >
+            {isLeftMarker ? (
+              <>
+                {labelNode}
+                {numberNode}
+              </>
+            ) : (
+              <>
+                {numberNode}
+                {labelNode}
+              </>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -211,6 +229,10 @@ export default function ResultPage({
   onNeedsConfirmation,
 }) {
   const rootRef = useRef(null)
+  const previewViewportRef = useRef(null)
+  const previewContentRef = useRef(null)
+  const [previewScale, setPreviewScale] = useState(1)
+  const [previewIndex, setPreviewIndex] = useState(0)
   const frame = currentFrame(result)
   const isPassed = Boolean(result?.overallPass)
   const title = isPassed ? 'Approved' : 'Not Passed'
@@ -231,7 +253,12 @@ export default function ResultPage({
         .from('.result-backdrop', { autoAlpha: 0, duration: 0.24 })
         .from('.result-close', { scale: 0.82, autoAlpha: 0, duration: 0.24, ease: 'back.out(1.8)' }, '-=0.08')
         .from('.phone-stage', { y: 28, scale: 0.965, autoAlpha: 0, duration: 0.46 }, '-=0.1')
-        .from('.result-footer-button', { y: 14, autoAlpha: 0, duration: 0.3, stagger: 0.05 }, '-=0.18')
+        .fromTo(
+          '.result-footer-button',
+          { y: 14, autoAlpha: 0 },
+          { y: 0, autoAlpha: 1, duration: 0.3, stagger: 0.05, clearProps: 'transform,opacity,visibility' },
+          '-=0.18',
+        )
         .from('.result-panel', { x: 96, autoAlpha: 0, duration: 0.46 }, '-=0.42')
         .from('.result-content-animate', { y: 10, autoAlpha: 0, duration: 0.28, stagger: 0.035 }, '-=0.18')
         .from('.issue-marker', { scale: 0.82, autoAlpha: 0, duration: 0.28, stagger: 0.06, ease: 'back.out(1.7)' }, '-=0.04')
@@ -249,6 +276,70 @@ export default function ResultPage({
     },
     { scope: rootRef, dependencies: [result?.kind, result?.overallPass], revertOnUpdate: true },
   )
+
+  useEffect(() => {
+    const viewport = previewViewportRef.current
+    if (!viewport) return undefined
+
+    const updatePreviewScale = () => {
+      const rect = viewport.getBoundingClientRect()
+      const style = window.getComputedStyle(viewport)
+      const horizontalPadding = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight)
+      const verticalPadding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom)
+      const widthForArrowsAndMarkers = 176
+      const usableWidth = Math.max(180, rect.width - horizontalPadding - widthForArrowsAndMarkers)
+      const usableHeight = Math.max(260, rect.height - verticalPadding)
+      const nextScale = Math.min(1, usableWidth / PREVIEW_SIZE.width, usableHeight / PREVIEW_SIZE.height)
+      setPreviewScale(Number(nextScale.toFixed(4)))
+    }
+
+    updatePreviewScale()
+    const resizeObserver = new ResizeObserver(updatePreviewScale)
+    resizeObserver.observe(viewport)
+    window.addEventListener('resize', updatePreviewScale)
+
+    return () => {
+      resizeObserver.disconnect()
+      window.removeEventListener('resize', updatePreviewScale)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!previewContentRef.current) return
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (reduceMotion) {
+      gsap.set(previewContentRef.current, { autoAlpha: 1, x: 0 })
+      return
+    }
+    gsap.fromTo(
+      previewContentRef.current,
+      { x: previewIndex === 0 ? -24 : 24, autoAlpha: 0 },
+      { x: 0, autoAlpha: 1, duration: 0.34, ease: 'power3.out', overwrite: 'auto' },
+    )
+  }, [previewIndex])
+
+  const hasPreviousPreview = previewIndex > 0
+  const hasNextPreview = previewIndex < LAST_PREVIEW_INDEX
+  const arrowButtonClass = (enabled) =>
+    `grid size-10 place-items-center rounded-full outline-none transition-[background-color,opacity,transform] duration-200 focus-visible:ring-2 focus-visible:ring-black/15 ${
+      enabled ? 'opacity-100 hover:scale-105 hover:bg-white/70 active:scale-95' : 'cursor-default opacity-20'
+    }`
+
+  const showPreviousPreview = () => {
+    if (!hasPreviousPreview) {
+      onNeedsConfirmation?.('已经是第一个预览')
+      return
+    }
+    setPreviewIndex((current) => Math.max(0, current - 1))
+  }
+
+  const showNextPreview = () => {
+    if (!hasNextPreview) {
+      onNeedsConfirmation?.('已经是最后一个预览')
+      return
+    }
+    setPreviewIndex((current) => Math.min(LAST_PREVIEW_INDEX, current + 1))
+  }
 
   return (
     <main ref={rootRef} className="relative min-h-screen overflow-hidden bg-[#f1f1f1] text-[#111827]">
@@ -277,30 +368,57 @@ export default function ResultPage({
           <CloseIcon />
         </button>
 
-        <div className="flex min-h-screen items-center justify-between px-5">
+        <div ref={previewViewportRef} className="flex h-full min-h-0 items-center justify-between px-5 pb-[82px] pt-[76px]">
           <button
-            className="grid size-10 place-items-center rounded-full outline-none transition-[background-color,transform] duration-200 hover:scale-105 hover:bg-white/70 active:scale-95 focus-visible:ring-2 focus-visible:ring-black/15"
+            className={arrowButtonClass(hasPreviousPreview)}
             type="button"
             aria-label="上一张"
-            onClick={() => onNeedsConfirmation?.('左右切换箭头的目标 Figma 未标注，等待你确认')}
+            aria-disabled={!hasPreviousPreview}
+            onClick={showPreviousPreview}
           >
             <ArrowIcon dir="left" />
           </button>
-          <div className="phone-stage relative will-change-transform">
-            <Preview src={frame?.src} video={result.kind === 'video' ? result.videoUrl : null} V={frame?.V} />
-            <IssueMarkers frame={frame} overallPass={isPassed} />
+          <div
+            className="phone-stage relative shrink-0 will-change-transform"
+            style={{
+              width: PREVIEW_SIZE.width * previewScale,
+              height: PREVIEW_SIZE.height * previewScale,
+            }}
+          >
+            <div
+              className="absolute left-0 top-0 origin-top-left"
+              style={{
+                width: PREVIEW_SIZE.width,
+                height: PREVIEW_SIZE.height,
+                transform: `scale(${previewScale})`,
+              }}
+            >
+              <div ref={previewContentRef} className="h-full w-full">
+                {previewIndex === 0 ? (
+                  <>
+                    <Preview src={frame?.src} video={result.kind === 'video' ? result.videoUrl : null} V={frame?.V} />
+                    <IssueMarkers frame={frame} overallPass={isPassed} />
+                  </>
+                ) : previewIndex === 1 ? (
+                  <PreviewPage2Frame V={frame?.V} />
+                ) : (
+                  <PreviewPage3Frame V={frame?.V} />
+                )}
+              </div>
+            </div>
           </div>
           <button
-            className="grid size-10 place-items-center rounded-full outline-none transition-[background-color,transform] duration-200 hover:scale-105 hover:bg-white/70 active:scale-95 focus-visible:ring-2 focus-visible:ring-black/15"
+            className={arrowButtonClass(hasNextPreview)}
             type="button"
             aria-label="下一张"
-            onClick={() => onNeedsConfirmation?.('左右切换箭头的目标 Figma 未标注，等待你确认')}
+            aria-disabled={!hasNextPreview}
+            onClick={showNextPreview}
           >
             <ArrowIcon />
           </button>
         </div>
 
-        <div className="absolute bottom-5 left-1/2 flex -translate-x-1/2 items-center gap-3">
+        <div className="absolute bottom-[20px] left-1/2 flex -translate-x-1/2 items-center gap-3">
           <button type="button" onClick={onDownloadBanner} className="result-footer-button h-10 rounded-full bg-black/[.04] px-4 text-[14px] outline-none transition-[background-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-white/80 active:translate-y-0 active:scale-95 focus-visible:ring-2 focus-visible:ring-black/15">
             下载banner
           </button>
