@@ -85,9 +85,9 @@ export function buildFrameResult({ img, src, data, check }) {
       issue: issueText('contrast'),
       recommendation: '增强文字、卡片与 banner 背景的明暗差',
       metrics: [
-        { label: '标题vs背景 WCAG', value: title?.val || '—', pass: Boolean(title?.pass), swatches: title?.sw || [] },
-        { label: '卡片上缘vs背景 WCAG', value: cardTop?.val || '—', pass: Boolean(cardTop?.pass), swatches: cardTop?.sw || [] },
-        { label: '卡片下缘vs背景 WCAG', value: cardBottom?.val || '—', pass: Boolean(cardBottom?.pass), swatches: cardBottom?.sw || [] },
+        { target: 'title', label: '标题vs背景', value: title?.val || '—', pass: Boolean(title?.pass), swatches: title?.sw || [] },
+        { target: 'cardTop', label: '卡片上缘vs背景', value: cardTop?.val || '—', pass: Boolean(cardTop?.pass), swatches: cardTop?.sw || [] },
+        { target: 'cardBottom', label: '卡片下缘vs背景', value: cardBottom?.val || '—', pass: Boolean(cardBottom?.pass), swatches: cardBottom?.sw || [] },
       ],
     },
     {

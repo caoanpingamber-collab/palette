@@ -132,21 +132,26 @@ function blobScan(cellE, gw, gh, totE) {
   const lab = new Int32Array(gw * gh).fill(-1), blobs = [], st = []
   for (let s = 0; s < gw * gh; s++) {
     if (!act[s] || lab[s] >= 0) continue
-    const id = blobs.length; let cells = 0, energy = 0
+    const id = blobs.length; let cells = 0, energy = 0, wx = 0, wy = 0
     st.push(s); lab[s] = id
     while (st.length) {
-      const p = st.pop(); cells++; energy += cellE[p]
+      const p = st.pop()
       const px = p % gw, py = (p / gw) | 0
+      const e = cellE[p]
+      cells++; energy += e; wx += (px + 0.5) * e; wy += (py + 0.5) * e
       if (px > 0 && act[p - 1] && lab[p - 1] < 0) { lab[p - 1] = id; st.push(p - 1) }
       if (px < gw - 1 && act[p + 1] && lab[p + 1] < 0) { lab[p + 1] = id; st.push(p + 1) }
       if (py > 0 && act[p - gw] && lab[p - gw] < 0) { lab[p - gw] = id; st.push(p - gw) }
       if (py < gh - 1 && act[p + gw] && lab[p + gw] < 0) { lab[p + gw] = id; st.push(p + gw) }
     }
-    blobs.push({ cells, energy })
+    blobs.push({ cells, energy, cx: energy ? wx / energy : 0, cy: energy ? wy / energy : 0 })
   }
   const sig = blobs.filter((b) => b.cells >= 3).sort((a, b) => b.energy - a.energy)
   const others = sig.slice(1), secE = others.reduce((a, b) => a + b.energy, 0)
-  return { secCount: others.length, secPct: totE ? +(secE / totE * 100).toFixed(1) : 0, blobs: sig.length }
+  const focus = others[0]
+    ? { x: +(((others[0].cx * CELL) / 400) * 393).toFixed(1), y: +(((others[0].cy * CELL) / 648) * 636).toFixed(1) }
+    : null
+  return { secCount: others.length, secPct: totE ? +(secE / totE * 100).toFixed(1) : 0, blobs: sig.length, focus }
 }
 
 // Banner QC: V color + 4 checks + ⑥ 主体外显著前景 (cover-fit so any size renders/checks).

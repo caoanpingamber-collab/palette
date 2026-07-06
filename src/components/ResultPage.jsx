@@ -8,6 +8,16 @@ import { gsap, useGSAP } from '../lib/gsap'
 
 const PREVIEW_SIZE = { width: 320, height: 694 }
 const LAST_PREVIEW_INDEX = 2
+const PREVIEW_ZOOM = 0.8142
+const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
+const previewPoint = (x, y) => ({ x: Math.round(x * PREVIEW_ZOOM), y: Math.round(y * PREVIEW_ZOOM) })
+const MARKER_TARGETS = {
+  hue: { ...previewPoint(34, 144), side: 'left', label: '冷色占比不足' },
+  chroma: { ...previewPoint(78, 170), side: 'left', label: '画面太灰' },
+  'contrast-title': { ...previewPoint(374, 218), side: 'right', label: '标题对比度不够' },
+  'contrast-cardTop': { ...previewPoint(374, 258), side: 'right', label: '卡片上缘对比度不够' },
+  'contrast-cardBottom': { ...previewPoint(374, 360), side: 'right', label: '卡片下缘对比度不够' },
+}
 
 function CloseIcon() {
   return <img src={FIGMA_ASSETS.close} alt="" className="size-6" />
@@ -35,9 +45,9 @@ function StatusPill({ pass }) {
 
 function MetricLine({ label, value }) {
   return (
-    <div className="flex items-center justify-end gap-2 text-right">
-      <span className="font-['PingFang_SC'] text-[12px] font-light text-[#111827]">{label}</span>
-      <strong className="font-['Floane'] text-[14px] leading-5 tracking-[1px] text-black">{value}</strong>
+    <div className="flex items-center justify-end gap-2 whitespace-nowrap text-right">
+      <span className="shrink-0 font-['PingFang_SC'] text-[12px] font-light text-[#111827]">{label}</span>
+      <strong className="shrink-0 font-['Floane'] text-[14px] leading-5 tracking-[1px] text-black">{value}</strong>
     </div>
   )
 }
@@ -120,8 +130,8 @@ function ResultRows({ frame, compact = false }) {
     <div className="px-5">
       {rows.map((item, index) => (
         <div key={item.key} className={`result-content-animate ${index > 0 ? 'border-t border-black/[.08]' : ''} py-3`}>
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex min-w-[122px] items-center gap-2">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-[104px] items-center gap-2">
               <span className="whitespace-nowrap text-[12px] leading-5 text-[#111827]/50">{item.label}</span>
               <StatusPill pass={item.status} />
             </div>
@@ -170,47 +180,82 @@ function FrameSwitcher({ result, onSwitchFrame }) {
   )
 }
 
+function buildIssueMarkers(frame) {
+  const markers = []
+  const pushMarker = (id, marker) => {
+    if (!marker) return
+    markers.push({ id, ...marker })
+  }
+  const metricTarget = (metric) => {
+    if (metric.target) return metric.target
+    if (metric.label?.includes('下缘')) return 'cardBottom'
+    if (metric.label?.includes('上缘')) return 'cardTop'
+    return 'title'
+  }
+
+  frame.failed.forEach((item) => {
+    if (item.key === 'contrast') {
+      const failedMetrics = (item.metrics || []).filter((metric) => !metric.pass)
+      if (!failedMetrics.length) {
+        pushMarker('contrast-title', MARKER_TARGETS['contrast-title'])
+        return
+      }
+      failedMetrics.forEach((metric) => {
+        const target = metricTarget(metric)
+        pushMarker(`contrast-${target}`, MARKER_TARGETS[`contrast-${target}`])
+      })
+      return
+    }
+
+    if (item.key === 'comp') {
+      const x = clamp((frame.check?.cxf ?? 0.5) * 393, 16, 377)
+      const y = clamp((frame.check?.cyf ?? 0.28) * 636, 76, 312)
+      pushMarker('comp', { ...previewPoint(x, y), side: x < 196 ? 'left' : 'right', label: item.issue })
+      return
+    }
+
+    if (item.key === 'clutter') {
+      const focus = frame.check?.clutter?.focus
+      const x = clamp(focus?.x ?? 350, 18, 375)
+      const y = clamp(focus?.y ?? 230, 58, 292)
+      pushMarker('clutter', { ...previewPoint(x, y), side: x > 320 ? 'right' : 'left', label: item.issue })
+      return
+    }
+
+    pushMarker(item.key, MARKER_TARGETS[item.key] || { ...previewPoint(36, 150), side: 'left', label: item.issue })
+  })
+
+  return markers
+}
+
 function IssueMarkers({ frame, overallPass }) {
   if (overallPass || !frame?.failed?.length) return null
-  const positions = {
-    hue: 'left-[-36px] top-[76px]',
-    chroma: 'left-[-34px] top-[86px]',
-    contrast: 'right-[-88px] top-[116px]',
-    comp: 'right-[-90px] top-[86px]',
-    clutter: 'right-[-80px] top-[206px]',
-  }
+  const markers = buildIssueMarkers(frame)
   return (
     <div className="pointer-events-none absolute inset-0">
-      {frame.failed.slice(0, 4).map((item, index) => {
-        const position = positions[item.key] || 'left-[-34px] top-[120px]'
-        const isLeftMarker = position.startsWith('left-')
+      {markers.map((marker, index) => {
+        const labelSideClass = marker.side === 'left' ? 'right-[24px]' : 'left-[24px]'
         const numberNode = (
           <span className="grid size-5 place-items-center rounded-full bg-white font-['Floane'] text-[13px] font-bold text-[#ff3436]">
             {index + 1}
           </span>
         )
         const labelNode = (
-          <span className="rounded-full bg-white px-2 py-px text-[12px] font-medium leading-5 text-[#ff3436] shadow-sm">
-            {item.issue}
+          <span className={`absolute top-1/2 -translate-y-1/2 whitespace-nowrap rounded-full bg-white px-2 py-px text-[12px] font-medium leading-5 text-[#ff3436] shadow-sm ${labelSideClass}`}>
+            {marker.label}
           </span>
         )
 
         return (
           <div
-            key={item.key}
-            className={`issue-marker absolute flex items-center gap-1 will-change-transform ${position}`}
+            key={marker.id}
+            className="absolute z-20"
+            style={{ left: marker.x, top: marker.y, transform: 'translate(-50%, -50%)' }}
           >
-            {isLeftMarker ? (
-              <>
-                {labelNode}
-                {numberNode}
-              </>
-            ) : (
-              <>
-                {numberNode}
-                {labelNode}
-              </>
-            )}
+            <div className="issue-marker relative will-change-transform">
+              {numberNode}
+              {labelNode}
+            </div>
           </div>
         )
       })}
@@ -268,7 +313,7 @@ export default function ResultPage({
         y: (index) => (index === 0 ? 14 : -10),
         rotation: (index) => (index === 0 ? -19 : -24),
         duration: 8,
-        ease: 'sine.inOut',
+        ease: 'linear',
         repeat: -1,
         yoyo: true,
         stagger: 0.35,
