@@ -1,0 +1,373 @@
+import { useRef } from 'react'
+import Preview from './Preview'
+import { currentFrame } from '../lib/analysis'
+import { FIGMA_ASSETS } from '../lib/figmaAssets'
+import { gsap, useGSAP } from '../lib/gsap'
+
+function CloseIcon() {
+  return <img src={FIGMA_ASSETS.close} alt="" className="size-6" />
+}
+
+function ArrowIcon({ dir = 'right' }) {
+  return <img src={dir === 'left' ? FIGMA_ASSETS.arrowLeft : FIGMA_ASSETS.arrowRight} alt="" className="size-10" />
+}
+
+function Logo() {
+  return <img src={FIGMA_ASSETS.logo} alt="CapCut" className="h-6 w-[94.617px]" />
+}
+
+function StatusPill({ pass }) {
+  return (
+    <span
+      className={`inline-flex h-[18px] items-center rounded-[5px] px-1 text-[11px] font-medium ${
+        pass ? 'bg-[#00ae701f] text-[#00ae70]' : 'bg-[#ff61631f] text-[#ff3436]'
+      }`}
+    >
+      {pass ? '通过' : '不通过'}
+    </span>
+  )
+}
+
+function MetricLine({ label, value }) {
+  return (
+    <div className="flex items-center justify-end gap-2 text-right">
+      <span className="font-['PingFang_SC'] text-[12px] font-light text-[#111827]">{label}</span>
+      <strong className="font-['Floane'] text-[14px] leading-5 tracking-[1px] text-black">{value}</strong>
+    </div>
+  )
+}
+
+function Swatch({ rgb, label }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span
+        className="size-4 rounded-[4px] border border-black/10"
+        style={{ background: rgb ? `rgb(${rgb[0]},${rgb[1]},${rgb[2]})` : '#d9d9d9' }}
+      />
+      {label}
+    </span>
+  )
+}
+
+function FailureDetail({ item, palette, frame }) {
+  if (item.status) return null
+
+  if (item.key === 'hue') {
+    const total = palette.reduce((sum, color) => sum + color.ratio, 0) || 1
+    return (
+      <div className="mt-2 rounded-[12px] bg-black/[.04] p-3">
+        <div className="mb-2 flex h-[22px] overflow-hidden rounded-[8px]">
+          {(palette.length ? palette : [{ hex: '#d9d9d9', ratio: 100 }]).slice(0, 4).map((color) => (
+            <span key={color.hex} style={{ width: `${Math.max(8, (color.ratio / total) * 100)}%`, background: color.hex }} />
+          ))}
+        </div>
+        <p className="text-[12px] leading-5 text-black/70">{item.detail}</p>
+      </div>
+    )
+  }
+
+  if (item.key === 'chroma') {
+    return (
+      <div className="mt-2 rounded-[12px] bg-black/[.04] p-3">
+        <div className="mb-2 flex items-center gap-1.5 text-[12px]">
+          <span className="size-4 rounded-[4px] border border-black/10" style={{ background: palette[0]?.hex || '#d9d9d9' }} />
+          主体色
+        </div>
+        <p className="text-[12px] leading-5 text-black/70">{item.detail}</p>
+      </div>
+    )
+  }
+
+  if (item.key === 'contrast') {
+    return (
+      <div className="mt-2 flex flex-col gap-2">
+        {item.metrics?.filter((m) => !m.pass).map((metric) => (
+          <div key={metric.label} className="rounded-[12px] bg-black/[.04] p-3">
+            <div className="mb-2 flex flex-wrap gap-3 text-[12px] text-black/70">
+              {metric.swatches?.map(([label, rgb]) => <Swatch key={label} rgb={rgb} label={label} />)}
+            </div>
+            <p className="text-[12px] leading-5 text-black/70">
+              {metric.label} = {metric.value}，不符合当前检测标准
+            </p>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <div className="mt-2 rounded-[12px] bg-black/[.04] p-3">
+      <p className="text-[12px] leading-5 text-black/70">{item.detail || item.recommendation}</p>
+      {item.key === 'clutter' && (
+        <p className="mt-1 text-[12px] leading-5 text-black/45">阈值 ≤8%，请减少 banner 上的边缘干扰元素。</p>
+      )}
+      {item.key === 'comp' && (
+        <p className="mt-1 text-[12px] leading-5 text-black/45">建议把主体或关键视觉信息放回右侧安全区域。</p>
+      )}
+      {frame?.width && <span className="sr-only">{frame.width}</span>}
+    </div>
+  )
+}
+
+function ResultRows({ frame, compact = false }) {
+  const rows = frame?.uiChecks || []
+  return (
+    <div className="px-5">
+      {rows.map((item, index) => (
+        <div key={item.key} className={`result-content-animate ${index > 0 ? 'border-t border-black/[.08]' : ''} py-3`}>
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex min-w-[122px] items-center gap-2">
+              <span className="whitespace-nowrap text-[12px] leading-5 text-[#111827]/50">{item.label}</span>
+              <StatusPill pass={item.status} />
+            </div>
+            <div className="min-w-0 flex-1">
+              {item.metrics ? (
+                <div className="flex flex-col gap-2">
+                  {item.metrics.map((metric) => (
+                    <MetricLine key={metric.label} label={metric.label} value={metric.value} />
+                  ))}
+                </div>
+              ) : (
+                <MetricLine label={item.metricLabel} value={item.metric} />
+              )}
+            </div>
+          </div>
+          {!compact && <FailureDetail item={item} palette={frame.palette || []} frame={frame} />}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function FrameSwitcher({ result, onSwitchFrame }) {
+  if (result.kind !== 'video') return null
+  return (
+    <div className="result-content-animate flex items-start gap-2 px-5 py-3">
+      {['first', 'last'].map((key) => {
+        const frame = result.frames[key]
+        const active = result.activeFrame === key
+        return (
+          <button
+            type="button"
+            key={key}
+            onClick={(event) => {
+              gsap.fromTo(event.currentTarget, { scale: 0.92 }, { scale: 1, duration: 0.24, ease: 'back.out(2)', overwrite: 'auto' })
+              onSwitchFrame(key)
+            }}
+            className={`relative size-8 overflow-hidden rounded-[8px] bg-[#d9d9d9] outline-none transition-[box-shadow,filter,transform] duration-200 hover:scale-105 hover:brightness-105 active:scale-95 focus-visible:ring-2 focus-visible:ring-black/20 ${active ? 'ring-1 ring-black ring-offset-2' : ''}`}
+            aria-label={key === 'first' ? '查看首帧' : '查看尾帧'}
+          >
+            <img src={frame.src} alt="" className="size-full object-cover" />
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function IssueMarkers({ frame, overallPass }) {
+  if (overallPass || !frame?.failed?.length) return null
+  const positions = {
+    hue: 'left-[-36px] top-[76px]',
+    chroma: 'left-[-34px] top-[86px]',
+    contrast: 'right-[-88px] top-[116px]',
+    comp: 'right-[-90px] top-[86px]',
+    clutter: 'right-[-80px] top-[206px]',
+  }
+  return (
+    <div className="pointer-events-none absolute inset-0">
+      {frame.failed.slice(0, 4).map((item, index) => (
+        <div
+          key={item.key}
+          className={`issue-marker absolute flex items-center gap-1 will-change-transform ${positions[item.key] || 'left-[-34px] top-[120px]'}`}
+        >
+          {item.key !== 'chroma' && (
+            <span className="grid size-5 place-items-center rounded-full bg-white font-['Floane'] text-[13px] font-bold text-[#ff3436]">
+              {index + 1}
+            </span>
+          )}
+          <span className="rounded-full bg-white px-2 py-px text-[12px] font-medium leading-5 text-[#ff3436] shadow-sm">
+            {item.issue}
+          </span>
+          {item.key === 'chroma' && (
+            <span className="grid size-5 place-items-center rounded-full bg-white font-['Floane'] text-[13px] font-bold text-[#ff3436]">
+              {index + 1}
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+export default function ResultPage({
+  result,
+  onClose,
+  onSwitchFrame,
+  onDownloadBanner,
+  onDownloadPreview,
+  onExportReport,
+  onCopyConfig,
+  onNeedsConfirmation,
+}) {
+  const rootRef = useRef(null)
+  const frame = currentFrame(result)
+  const isPassed = Boolean(result?.overallPass)
+  const title = isPassed ? 'Approved' : 'Not Passed'
+  const description = isPassed
+    ? '头部banner已通过冷色相册检测、chroma色感检测、WCAG对比度检测、画面构图重心检测'
+    : result.recommendation
+
+  useGSAP(
+    () => {
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      if (reduceMotion) {
+        gsap.set('.result-animate', { autoAlpha: 1, clearProps: 'transform' })
+        return
+      }
+
+      gsap
+        .timeline({ defaults: { ease: 'power3.out' } })
+        .from('.result-backdrop', { autoAlpha: 0, duration: 0.24 })
+        .from('.result-close', { scale: 0.82, autoAlpha: 0, duration: 0.24, ease: 'back.out(1.8)' }, '-=0.08')
+        .from('.phone-stage', { y: 28, scale: 0.965, autoAlpha: 0, duration: 0.46 }, '-=0.1')
+        .from('.result-footer-button', { y: 14, autoAlpha: 0, duration: 0.3, stagger: 0.05 }, '-=0.18')
+        .from('.result-panel', { x: 96, autoAlpha: 0, duration: 0.46 }, '-=0.42')
+        .from('.result-content-animate', { y: 10, autoAlpha: 0, duration: 0.28, stagger: 0.035 }, '-=0.18')
+        .from('.issue-marker', { scale: 0.82, autoAlpha: 0, duration: 0.28, stagger: 0.06, ease: 'back.out(1.7)' }, '-=0.04')
+
+      gsap.to('.result-bg-star', {
+        x: (index) => (index === 0 ? -10 : 16),
+        y: (index) => (index === 0 ? 14 : -10),
+        rotation: (index) => (index === 0 ? -19 : -24),
+        duration: 8,
+        ease: 'sine.inOut',
+        repeat: -1,
+        yoyo: true,
+        stagger: 0.35,
+      })
+    },
+    { scope: rootRef, dependencies: [result?.kind, result?.overallPass], revertOnUpdate: true },
+  )
+
+  return (
+    <main ref={rootRef} className="relative min-h-screen overflow-hidden bg-[#f1f1f1] text-[#111827]">
+      <img
+        src={FIGMA_ASSETS.bgStar}
+        alt=""
+        className="result-bg-star pointer-events-none absolute right-[-190px] top-[-189px] size-[519px] rotate-[-22.44deg] object-cover opacity-30 will-change-transform"
+      />
+      <img
+        src={FIGMA_ASSETS.bgStar}
+        alt=""
+        className="result-bg-star pointer-events-none absolute bottom-[-229px] left-[-348px] size-[519px] rotate-[-20.42deg] object-cover opacity-30 will-change-transform"
+      />
+
+      <nav className="absolute left-0 right-0 top-0 flex h-[60px] items-center px-6">
+        <Logo />
+      </nav>
+
+      <section className="result-backdrop absolute inset-y-0 left-0 right-[360px] overflow-hidden bg-[rgba(241,241,241,.4)] backdrop-blur-[20px]">
+        <button
+          type="button"
+          onClick={onClose}
+          className="result-close absolute left-[30px] top-[30px] z-20 grid size-[44px] place-items-center rounded-full bg-[#f9f9f9] text-black shadow-[0_8px_30px_rgba(0,0,0,.08)] outline-none transition-[background-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-white active:translate-y-0 active:scale-95 focus-visible:ring-2 focus-visible:ring-black/15"
+          aria-label="关闭结果页"
+        >
+          <CloseIcon />
+        </button>
+
+        <div className="flex min-h-screen items-center justify-between px-5">
+          <button
+            className="grid size-10 place-items-center rounded-full outline-none transition-[background-color,transform] duration-200 hover:scale-105 hover:bg-white/70 active:scale-95 focus-visible:ring-2 focus-visible:ring-black/15"
+            type="button"
+            aria-label="上一张"
+            onClick={() => onNeedsConfirmation?.('左右切换箭头的目标 Figma 未标注，等待你确认')}
+          >
+            <ArrowIcon dir="left" />
+          </button>
+          <div className="phone-stage relative will-change-transform">
+            <Preview src={frame?.src} video={result.kind === 'video' ? result.videoUrl : null} V={frame?.V} />
+            <IssueMarkers frame={frame} overallPass={isPassed} />
+          </div>
+          <button
+            className="grid size-10 place-items-center rounded-full outline-none transition-[background-color,transform] duration-200 hover:scale-105 hover:bg-white/70 active:scale-95 focus-visible:ring-2 focus-visible:ring-black/15"
+            type="button"
+            aria-label="下一张"
+            onClick={() => onNeedsConfirmation?.('左右切换箭头的目标 Figma 未标注，等待你确认')}
+          >
+            <ArrowIcon />
+          </button>
+        </div>
+
+        <div className="absolute bottom-5 left-1/2 flex -translate-x-1/2 items-center gap-3">
+          <button type="button" onClick={onDownloadBanner} className="result-footer-button h-10 rounded-full bg-black/[.04] px-4 text-[14px] outline-none transition-[background-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-white/80 active:translate-y-0 active:scale-95 focus-visible:ring-2 focus-visible:ring-black/15">
+            下载banner
+          </button>
+          <button type="button" onClick={onDownloadPreview} className="result-footer-button h-10 rounded-full bg-black/[.04] px-4 text-[14px] outline-none transition-[background-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-white/80 active:translate-y-0 active:scale-95 focus-visible:ring-2 focus-visible:ring-black/15">
+            下载预览
+          </button>
+        </div>
+      </section>
+
+      <aside className="result-panel absolute bottom-0 right-0 top-0 flex w-[360px] flex-col overflow-hidden bg-white will-change-transform">
+        <div className="flex h-[60px] shrink-0 items-center justify-between border-b border-black/[.08] px-5">
+          <span className="font-['PingFang_SC'] text-[14px] font-light">banner类型</span>
+          <button
+            type="button"
+            className="flex h-8 items-center gap-1 rounded-full bg-black/[.04] pl-4 pr-3 font-['PingFang_SC'] text-[12px] outline-none transition-[background-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-black/[.07] active:translate-y-0 active:scale-95 focus-visible:ring-2 focus-visible:ring-black/15"
+            onClick={() => onNeedsConfirmation?.('banner 类型下拉选项 Figma 未标注，等待你确认')}
+          >
+            功能宣推
+            <img src={FIGMA_ASSETS.chevronRight} alt="" className="size-[10px] rotate-90" />
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className={`${isPassed ? 'px-5 py-5' : 'flex flex-col gap-2 p-5'}`}>
+            <h1 className="result-content-animate font-['Floane'] text-[20px] font-bold italic tracking-[1px] text-black">{title}</h1>
+            {!isPassed && (
+              <>
+                <p className="result-content-animate text-[12px] leading-5 text-black/70">{description}</p>
+                <div className="result-content-animate relative rounded-[12px] bg-black/[.04] p-3 pr-8">
+                  <div className="mb-2 text-[12px] leading-5 text-black/40">Prompt</div>
+                  <p className="max-h-[60px] overflow-y-auto text-[12px] leading-5 text-black">{result.prompt}</p>
+                  <button
+                    type="button"
+                    onClick={() => navigator.clipboard?.writeText(result.prompt || '')}
+                    className="absolute right-3 top-3 rounded-[6px] p-1 outline-none transition-[background-color,transform] duration-200 hover:scale-110 hover:bg-black/[.06] active:scale-95 focus-visible:ring-2 focus-visible:ring-black/15"
+                    aria-label="复制 Prompt"
+                  >
+                    <img src={FIGMA_ASSETS.copy} alt="" className="size-4 opacity-45" />
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+
+          <FrameSwitcher result={result} onSwitchFrame={onSwitchFrame} />
+          <ResultRows frame={frame} compact={isPassed} />
+        </div>
+
+        <div className="flex shrink-0 justify-end gap-3 border-t border-black/[.04] bg-white p-5">
+          <button
+            type="button"
+            onClick={onExportReport}
+            className="h-10 rounded-full border border-black/[.12] px-[14px] text-[14px] outline-none transition-[background-color,border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-black/20 hover:bg-black/[.04] active:translate-y-0 active:scale-95 focus-visible:ring-2 focus-visible:ring-black/15"
+          >
+            导出报告
+          </button>
+          {isPassed ? (
+            <button type="button" onClick={onExportReport} className="h-10 rounded-full bg-black px-[14px] text-[14px] text-white outline-none transition-[background-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-black/85 active:translate-y-0 active:scale-95 focus-visible:ring-2 focus-visible:ring-black/20">
+              导出检测报告
+            </button>
+          ) : (
+            <button type="button" onClick={onCopyConfig} className="h-10 rounded-full bg-black px-[14px] text-[14px] text-white outline-none transition-[background-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-black/85 active:translate-y-0 active:scale-95 focus-visible:ring-2 focus-visible:ring-black/20">
+              复制配置色
+            </button>
+          )}
+        </div>
+      </aside>
+    </main>
+  )
+}

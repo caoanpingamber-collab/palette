@@ -1,0 +1,80 @@
+/*
+ * CUX Design System — Web Font Declarations
+ * Font Family: CapCut Sans (Display + Text)
+ * Source: assets/fonts/
+ *
+ * HOW TO USE:
+ *   Import this file once at the root of your web project:
+ *   <link rel="stylesheet" href="path/to/CUX-Skill/assets/fonts/font-face.css">
+ *   or:
+ *   @import 'path/to/CUX-Skill/assets/fonts/font-face.css';
+ *
+ * Then use the CSS variables in your components:
+ *   font-family: var(--cux-font-display);   ← Titles, Headlines
+ *   font-family: var(--cux-font-text);      ← Body, Subtitle, SmallText
+ */
+
+/* ─── CapCut Sans Display ─────────────────────────────────────────────────── */
+/* Usage: LargeTitle, Title1, Title2, Title3, Headline                         */
+
+@font-face {
+  font-family: 'CapCutSansDisplay';
+  src: url('./CapCutSansDisplay-Regular.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'CapCutSansDisplay';
+  src: url('./CapCutSansDisplay-Medium.otf') format('opentype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'CapCutSansDisplay';
+  src: url('./CapCutSansDisplay-Bold.otf') format('opentype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ─── CapCut Sans Text ────────────────────────────────────────────────────── */
+/* Usage: Subtitle, Body1, Body2, Body3, SmallText                             */
+
+@font-face {
+  font-family: 'CapCutSansText';
+  src: url('./CapCutSansText-Regular.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'CapCutSansText';
+  src: url('./CapCutSansText-Medium.otf') format('opentype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'CapCutSansText';
+  src: url('./CapCutSansText-Bold.otf') format('opentype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ─── CSS Custom Properties ──────────────────────────────────────────────── */
+/* Apply to :root so all CUX components inherit automatically                  */
+
+:root {
+  --cux-font-display: 'CapCutSansDisplay', system-ui, sans-serif;
+  --cux-font-text:    'CapCutSansText',    system-ui, sans-serif;
+
+  /* Aliases matching the script template usage */
+  --cux-font-family:  var(--cux-font-text);  /* default for body-level components */
+}
