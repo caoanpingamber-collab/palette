@@ -27,16 +27,22 @@
   transition: opacity 180ms ease;
 }
 
+.pattern-refraction__canvas--2d {
+  filter: contrast(1.08) saturate(1.06);
+}
+
 .pattern-refraction__fallback {
   opacity: 1;
   transition: opacity 180ms ease;
   user-select: none;
 }
 
-.pattern-refraction[data-ready='true'] .pattern-refraction__canvas {
+.pattern-refraction[data-renderer='webgl'] .pattern-refraction__canvas--webgl,
+.pattern-refraction[data-renderer='2d'] .pattern-refraction__canvas--2d {
   opacity: 1;
 }
 
-.pattern-refraction[data-ready='true'] .pattern-refraction__fallback {
+.pattern-refraction[data-renderer='webgl'] .pattern-refraction__fallback,
+.pattern-refraction[data-renderer='2d'] .pattern-refraction__fallback {
   opacity: 0;
 }

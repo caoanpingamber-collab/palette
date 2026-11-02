@@ -4,7 +4,7 @@ export const R = (n) => Math.round(n)
 const CONTRAST_LIMITS = {
   title: 2,
   cardTop: 2,
-  cardBottom: 1.5,
+  cardBottom: 1.2,
 }
 const CARD_HUE_MIN = 160
 const CARD_HUE_MAX = 270
@@ -124,7 +124,7 @@ export function chromaScore(clusters, total) {
 
 // 内容区网格能量 → 连通块（4 邻接）；主体=最大块，其余=主体外显著前景(⑥)。
 // 连续花背景会连成一整块（主体）→ 无次级块；贴上去的标题/图标/角标在平滑背景上独立成块 → 次级块。
-function blobScan(cellE, gw, gh, totE) {
+function blobScan(cellE, gw, gh, totE, cellSize) {
   let maxc = 0
   for (let i = 0; i < cellE.length; i++) if (cellE[i] > maxc) maxc = cellE[i]
   const T = maxc * 0.12, act = new Uint8Array(gw * gh)
@@ -149,7 +149,7 @@ function blobScan(cellE, gw, gh, totE) {
   const sig = blobs.filter((b) => b.cells >= 3).sort((a, b) => b.energy - a.energy)
   const others = sig.slice(1), secE = others.reduce((a, b) => a + b.energy, 0)
   const focus = others[0]
-    ? { x: +(((others[0].cx * CELL) / 400) * 393).toFixed(1), y: +(((others[0].cy * CELL) / 648) * 636).toFixed(1) }
+    ? { x: +(((others[0].cx * cellSize) / 400) * 393).toFixed(1), y: +(((others[0].cy * cellSize) / 648) * 636).toFixed(1) }
     : null
   return { secCount: others.length, secPct: totE ? +(secE / totE * 100).toFixed(1) : 0, blobs: sig.length, focus }
 }
@@ -185,18 +185,20 @@ export function bannerCheck(img) {
   const titleContrast = contrastResult(c1, CONTRAST_LIMITS.title)
   const cardTopContrast = contrastResult(c2, CONTRAST_LIMITS.cardTop)
   const cardBottomContrast = contrastResult(c3, CONTRAST_LIMITS.cardBottom)
-  // 单遍梯度：求视觉重心(④) + 在内容区(顶 46%)累积网格能量做主体外显著块检测(⑥)
+  // 单遍梯度：在主视觉区(顶 46%)求视觉重心(④)并累积网格能量做主体外显著块检测(⑥)
   const CY = R(ch * 0.46), CELL = 16, gw = Math.ceil(cw / CELL), gh = Math.ceil(CY / CELL)
   const cellE = new Float64Array(gw * gh); let totE = 0
   let sx = 0, sy = 0, sw = 0
   for (let y = 1; y < ch - 1; y++) for (let x = 1; x < cw - 1; x++) {
     const i = (y * cw + x) * 4, ir = i + 4, id = i + cw * 4
     const w = Math.abs(data[i] - data[ir]) + Math.abs(data[i + 1] - data[ir + 1]) + Math.abs(data[i + 2] - data[ir + 2]) + Math.abs(data[i] - data[id]) + Math.abs(data[i + 1] - data[id + 1]) + Math.abs(data[i + 2] - data[id + 2])
-    sx += x * w; sy += y * w; sw += w
-    if (y < CY) { cellE[((y / CELL) | 0) * gw + ((x / CELL) | 0)] += w; totE += w }
+    if (y < CY) {
+      sx += x * w; sy += y * w; sw += w
+      cellE[((y / CELL) | 0) * gw + ((x / CELL) | 0)] += w; totE += w
+    }
   }
   const cxf = sw ? sx / sw / cw : 0.5, cyf = sw ? sy / sw / ch : 0.5
-  const clutter = blobScan(cellE, gw, gh, totE)
+  const clutter = blobScan(cellE, gw, gh, totE, CELL)
   return {
     V, sizeOk: iw === 800 && ih === 1296, clutter,
     checks: [

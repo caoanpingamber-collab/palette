@@ -3,6 +3,8 @@ import ResultPage from './components/ResultPage'
 import PreviewPage from './components/PreviewPage'
 import Grainient from './components/Grainient/Grainient'
 import PatternRefraction from './components/PatternRefraction/PatternRefraction'
+import HistoryAdmin from './components/HistoryAdmin'
+import { archiveInspection, isArchiveEnabled, prepareArchive } from './lib/history.mjs'
 import { bannerCheck, extract } from './lib/color'
 import { exportReport } from './lib/report'
 import { FIGMA_ASSETS, WIKI_URL } from './lib/figmaAssets'
@@ -222,6 +224,7 @@ function HomePage({ onPickFile, error, loading, onNotice }) {
 
   return (
     <main ref={rootRef} className="relative min-h-screen overflow-hidden bg-[#f1f1f1] text-[#111827]">
+      {import.meta.env.VITE_HIDE_DECORATIVE_BACKGROUND !== 'true' && <>
       <PatternRefraction
         src={FIGMA_ASSETS.bgStar}
         className="home-bg-star home-bg-star--top"
@@ -237,6 +240,7 @@ function HomePage({ onPickFile, error, loading, onNotice }) {
         duration={6000}
       />
 
+      </>}
       <nav className="home-nav relative z-10 flex h-[60px] items-center justify-between px-6">
         <Logo />
         <a
@@ -374,13 +378,32 @@ function HomePage({ onPickFile, error, loading, onNotice }) {
 }
 
 export default function App() {
-  const [page, setPage] = useState('home')
+  const [page, setPage] = useState(() => /\/admin\/?$/.test(window.location.pathname) ? 'admin' : 'home')
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState('')
   const videoUrlRef = useRef(null)
   const toastTimerRef = useRef(null)
+
+  useEffect(() => {
+    const onPop = () => setPage(/\/admin\/?$/.test(window.location.pathname) ? 'admin' : 'home')
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
+
+  const homeFromHistory = () => {
+    window.history.pushState({}, '', window.location.pathname.replace(/\/admin\/?$/, '/') || '/')
+    setPage('home')
+  }
+  const beginArchive = async (file, nextResult) => {
+    try {
+      if (!await isArchiveEnabled()) return
+      await archiveInspection(await prepareArchive(file, nextResult))
+    } catch (failure) {
+      console.warn('检测历史保存失败：', failure.message)
+    }
+  }
 
   const flash = (text) => {
     if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current)
@@ -443,8 +466,10 @@ export default function App() {
           reader.readAsDataURL(file)
         })
         const frame = await analyzeSrc(src)
-        setResult(buildImageResult(frame, file.name || 'banner.png'))
+        const nextResult = buildImageResult(frame, file.name || 'banner.png')
+        setResult(nextResult)
         setPage('result')
+        void beginArchive(file, nextResult)
         return
       }
 
@@ -455,8 +480,10 @@ export default function App() {
         first: await analyzeSrc(extracted.first),
         last: await analyzeSrc(extracted.last),
       }
-      setResult(buildVideoResult({ frames, videoUrl, fileName: file.name || 'banner.mp4' }))
+      const nextResult = buildVideoResult({ frames, videoUrl, fileName: file.name || 'banner.mp4' })
+      setResult(nextResult)
       setPage('result')
+      void beginArchive(file, nextResult)
     } catch (err) {
       releaseVideoUrl()
       setError(err.message || '处理失败')
@@ -526,6 +553,7 @@ export default function App() {
   return (
     <>
       {page === 'home' && <HomePage onPickFile={handleFile} error={error} loading={loading} onNotice={flash} />}
+      {page === 'admin' && <HistoryAdmin onHome={homeFromHistory} />}
       {page === 'result' && result && (
         <ResultPage
           result={result}
