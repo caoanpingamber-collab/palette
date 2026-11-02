@@ -11,10 +11,10 @@ const querySchema = z.object({
   from: z.iso.datetime().optional(), to: z.iso.datetime().optional(), page: z.coerce.number().int().min(1).max(100000).default(1), pageSize: z.coerce.number().int().min(1).max(50).default(20),
 })
 
-export function createApp({ store, archiveEnabled = false, allowedOrigins = [], secureCookies = false, cookieName, cookiePath, localDevelopment = false, staticDir, uploadLimit = 60, maxUploads = 4 }) {
+export function createApp({ store, archiveEnabled = false, allowedOrigins = [], secureCookies = false, cookieName, cookiePath, sessionTransport = 'cookie', localDevelopment = false, staticDir, uploadLimit = 60, maxUploads = 4 }) {
   const app = express()
   app.disable('x-powered-by')
-  const auth = createAuth(store, { secureCookies, cookieName, cookiePath })
+  const auth = createAuth(store, { secureCookies, cookieName, cookiePath, sessionTransport })
   let uploads = 0
   const reserveUpload = (req, res, next) => {
     if (uploads >= maxUploads) return next(new HttpError(429, '当前上传较多，请稍后重试保存'))
@@ -27,15 +27,20 @@ export function createApp({ store, archiveEnabled = false, allowedOrigins = [], 
   }
   app.use('/api', (req, res, next) => {
     res.set({ 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'; sandbox" })
+    const origin = req.get('Origin')
+    if (sessionTransport === 'bearer' && origin === 'null' && allowedOrigins.includes('null')) {
+      // The bearer, not an opaque origin or an ambient cookie, authorizes private data.
+      res.vary('Origin').set({ 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, HEAD, POST, DELETE, OPTIONS', 'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-CSRF-Token, Range' })
+      if (req.method === 'OPTIONS') return res.status(204).end()
+    } else if (sessionTransport === 'bearer' && req.method === 'OPTIONS') return next(new HttpError(403, '不允许此来源提交请求'))
     if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
-      const origin = req.get('Origin')
       const local = localDevelopment && /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin || '')
       if (!origin || (!allowedOrigins.includes(origin) && !local)) return next(new HttpError(403, '不允许此来源提交请求'))
     }
     next()
   })
   app.use('/api/admin', express.json({ limit: '4kb', inflate: false }))
-  app.get('/api/health', (req, res) => res.json({ ready: true, archiveEnabled, storage: store.provider || 'local' }))
+  app.get('/api/health', (req, res) => res.json({ ready: true, archiveEnabled, storage: store.provider || 'local', adminAuth: sessionTransport }))
   app.post('/api/admin/login', rateLimit({ max: 10, windowMs: 15 * 60 * 1000 }), auth.login)
   app.get('/api/admin/session', auth.authenticate, auth.session)
   app.post('/api/admin/logout', auth.authenticate, auth.csrf, auth.logout)

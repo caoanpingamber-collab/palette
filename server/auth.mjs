@@ -37,10 +37,14 @@ export function rateLimit({ max, windowMs }) {
   }
 }
 
-export function createAuth(store, { secureCookies = false, sessionMs = 8 * 60 * 60 * 1000, cookieName = 'banner_admin', cookiePath = '/' } = {}) {
+export function createAuth(store, { secureCookies = false, sessionMs = 8 * 60 * 60 * 1000, cookieName = 'banner_admin', cookiePath = '/', sessionTransport = 'cookie' } = {}) {
+  if (!['cookie', 'bearer'].includes(sessionTransport)) throw new Error('Unsupported administrator session transport')
   const cookie = (value, maxAge) => serialize(cookieName, value, { httpOnly: true, sameSite: 'strict', secure: secureCookies, path: cookiePath, maxAge })
+  const tokenFrom = req => sessionTransport === 'bearer'
+    ? /^Bearer ([a-f0-9]{64})$/i.exec(req.get('Authorization') || '')?.[1]
+    : parse(req.headers.cookie || '')[cookieName]
   const authenticate = async (req, res, next) => {
-    const token = parse(req.headers.cookie || '')[cookieName]
+    const token = tokenFrom(req)
     const session = token && /^[a-f0-9]{64}$/.test(token) ? await store.getSession(digest(token)) : null
     if (!session) return next(new HttpError(401, '请登录管理员账号'))
     req.adminSession = session
@@ -58,18 +62,20 @@ export function createAuth(store, { secureCookies = false, sessionMs = 8 * 60 * 
     // Always hash the supplied password, including for an unknown username.
     const valid = await verifyPassword(password, admin.password_hash)
     if (!valid || !same(username, admin.username)) throw new HttpError(401, '账号或密码不正确')
-    const previous = parse(req.headers.cookie || '')[cookieName]
+    const previous = tokenFrom(req)
     if (previous) await store.deleteSession(digest(previous))
     await store.pruneSessions()
     const token = randomBytes(32).toString('hex')
     const csrfToken = randomBytes(32).toString('hex')
     if (!await store.saveSession(digest(token), csrfToken, Date.now() + sessionMs, admin.password_hash)) throw new HttpError(401, '管理员密码已变更，请重新登录')
+    if (sessionTransport === 'bearer') return res.json({ username: admin.username, csrfToken, accessToken: token })
     res.set('Set-Cookie', cookie(token, Math.floor(sessionMs / 1000))).json({ username: admin.username, csrfToken })
   }
   const session = async (req, res) => res.json({ username: (await store.getAdmin()).username, csrfToken: req.adminSession.csrf })
   const logout = async (req, res) => {
     await store.deleteSession(req.adminSession.token_hash)
-    res.set('Set-Cookie', cookie('', 0)).status(204).end()
+    if (sessionTransport === 'cookie') res.set('Set-Cookie', cookie('', 0))
+    res.status(204).end()
   }
   return { authenticate, csrf, login, session, logout }
 }

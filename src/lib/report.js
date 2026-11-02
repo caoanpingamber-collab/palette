@@ -178,8 +178,10 @@ function drawReportRows(ctx, frame, startY, includeDetails) {
   return y
 }
 
-export async function exportReport({ result, frame }) {
+export async function exportReport({ result, frame, signal }) {
+  signal?.throwIfAborted()
   if (document.fonts?.ready) await document.fonts.ready
+  signal?.throwIfAborted()
 
   const passed = Boolean(result.overallPass)
   const W = 408
@@ -244,6 +246,7 @@ export async function exportReport({ result, frame }) {
   }
 
   const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', .92))
+  signal?.throwIfAborted()
   const a = document.createElement('a')
   a.href = URL.createObjectURL(blob)
   a.download = passed ? 'banner-report-approved.jpg' : 'banner-report-not-passed.jpg'

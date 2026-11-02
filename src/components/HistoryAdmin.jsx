@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, ArrowUpRight, ChevronLeft, ChevronRight, Download, FileImage, Film, History, LoaderCircle, LogOut, RefreshCw, Search, ShieldCheck, Trash2, X } from 'lucide-react'
-import { assetUrl, deleteHistory, getAdminSession, getHistory, listHistory, loginAdmin, logoutAdmin, restoreResult } from '../lib/history.mjs'
+import { assetUrl, deleteHistory, getAdminSession, getHistory, listHistory, loginAdmin, logoutAdmin, releaseHistoryMedia, restoreResult } from '../lib/history.mjs'
 import { exportReport } from '../lib/report'
 import { FIGMA_ASSETS } from '../lib/figmaAssets'
 import './HistoryAdmin.css'
@@ -39,6 +39,11 @@ function Login({ onLogin, error, setError, onHome }) {
 }
 
 function Detail({ record, onBack, onDelete, onError, ensureSession }) {
+  const lifecycle = useRef(null)
+  useEffect(() => {
+    lifecycle.current = new AbortController()
+    return () => { lifecycle.current.abort(); releaseHistoryMedia(record.id) }
+  }, [record.id])
   const [selected, setSelected] = useState('first')
   const [exporting, setExporting] = useState(false)
   const [downloading, setDownloading] = useState(false)
@@ -46,7 +51,7 @@ function Detail({ record, onBack, onDelete, onError, ensureSession }) {
   const frame = result.kind === 'video' ? result.frames[selected] : result.frame
   async function report() {
     setExporting(true)
-    try { await ensureSession(); await exportReport({ result, frame }) } catch (failure) { onError(failure.status ? failure : new Error(failure.message || '报告导出失败，请重试')) }
+    try { await ensureSession(); await exportReport({ result, frame, signal: lifecycle.current.signal }) } catch (failure) { if (failure.name !== 'AbortError') onError(failure.status ? failure : new Error(failure.message || '报告导出失败，请重试')) }
     finally { setExporting(false) }
   }
   async function download(event) {
@@ -55,11 +60,12 @@ function Detail({ record, onBack, onDelete, onError, ensureSession }) {
     setDownloading(true)
     try {
       await ensureSession()
+      lifecycle.current.signal.throwIfAborted()
       const anchor = document.createElement('a')
       anchor.href = assetUrl(record.id, 'original', true)
       anchor.download = result.fileName
       anchor.click()
-    } catch (failure) { onError(failure) }
+    } catch (failure) { if (failure.name !== 'AbortError') onError(failure) }
     finally { setDownloading(false) }
   }
   return (
@@ -145,8 +151,11 @@ export default function HistoryAdmin({ onHome }) {
     finally { if (token === detailRequest.current) setOpening(null) }
   }
   async function logout() {
-    try { await logoutAdmin(session.csrfToken); ++detailRequest.current; setSession(null); setDetail(null); setData(null); setError('') }
-    catch (failure) { handleError(failure) }
+    const csrfToken = session.csrfToken
+    const request = ++detailRequest.current
+    setSession(null); setDetail(null); setData(null); setError('')
+    try { await logoutAdmin(csrfToken) }
+    catch { if (request === detailRequest.current) setError('已退出当前页面；服务端注销未确认，请稍后重新登录。') }
   }
   async function remove() {
     if (deleting) return
@@ -164,7 +173,7 @@ export default function HistoryAdmin({ onHome }) {
   }
 
   if (checking) return <main className="history-app history-loading" role="status"><Spinner />正在连接历史服务</main>
-  if (!session) return <Login onLogin={value => { setError(''); setSession(value) }} error={error} setError={setError} onHome={onHome} />
+  if (!session) return <Login onLogin={value => { ++detailRequest.current; setError(''); setSession(value) }} error={error} setError={setError} onHome={onHome} />
   const stats = data?.stats
   const totalPages = Math.max(1, Math.ceil((data?.total || 0) / (data?.pageSize || 20)))
   return (

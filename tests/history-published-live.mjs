@@ -9,7 +9,7 @@ const appId = 'app_17h055cggnm', base = `https://bytedance.feishu.link/app/${app
 const repository = new MiaodaRepository(new MiaodaSql({ appId, env: 'online' }))
 const token = randomBytes(32).toString('hex'), csrf = randomBytes(32).toString('hex')
 assert.ok(await repository.saveSession(digest(token), csrf, Date.now() + 300000))
-const headers = { Cookie: `banner_admin_${appId}=${token}`, 'X-CSRF-Token': csrf }
+const headers = { Authorization: `Bearer ${token}`, 'X-CSRF-Token': csrf }
 const id = randomUUID()
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC1lEQVR42mP8/x8AAwMCAO+j1WQAAAAASUVORK5CYII=', 'base64')
 const frame = { width: 800, height: 1296, palette: [], V: [0, 0, 0], VHex: '#000000', cold: 100, chroma: 60,
@@ -30,6 +30,7 @@ try {
   assert.equal(saved.status, 201, JSON.stringify(await saved.json()))
   assert.equal((await request('/api/history', { method: 'POST', body: form })).status, 200)
   assert.equal((await request('/api/history')).status, 401)
+  assert.equal((await request('/api/history', { headers: { Cookie: `banner_admin_${appId}=${token}` } })).status, 401)
   assert.equal((await request(`/api/history/${id}/files/original`)).status, 401)
   const record = await repository.raw(id)
   assert.equal(record.state, 'ready')
@@ -42,7 +43,8 @@ try {
   const range = await request(`/api/history/${id}/files/original`, { headers: { ...headers, Range: 'bytes=0-7' } })
   assert.equal(range.status, 206)
   assert.equal((await range.arrayBuffer()).byteLength, 8)
-  assert.equal((await request(`/api/history/${id}`, { method: 'DELETE', headers })).status, 204)
+  const removed = await request(`/api/history/${id}`, { method: 'DELETE', headers })
+  assert.equal(removed.status, 204, removed.status === 204 ? '' : await removed.text())
   assert.equal((await request('/api/history', { method: 'POST', body: form })).status, 410)
   console.log(JSON.stringify({ publishedApi: true, cloudWrite: true, independentOnlineRead: true, anonymousReadDenied: true, privateOriginalMatches: true, range: true, deletion: true, lateRetryDenied: true }))
 } finally {

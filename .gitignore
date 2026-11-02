@@ -6,3 +6,4 @@ dist
 /test-results/
 .publish-dist/
 /docs/handoff/
+/.admin-dist/

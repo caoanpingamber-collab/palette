@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-test('local cloud proxy scopes cookies, origin and paths without persisting materials', async t => {
+test('local cloud proxy forwards only anonymous uploads and never carries administrator authority', async t => {
   const { createRemoteApp } = await import('../server/remote-app.mjs')
   const token = 'a'.repeat(64)
   const calls = []
@@ -13,19 +13,18 @@ test('local cloud proxy scopes cookies, origin and paths without persisting mate
   await new Promise(resolve => server.once('listening', resolve))
   t.after(() => new Promise(resolve => server.close(resolve)))
   const url = `http://127.0.0.1:${server.address().port}`
-  const response = await fetch(url + '/api/admin/login', { method: 'POST', headers: { Origin: 'http://127.0.0.1:5190', Cookie: `other_secret=never-forward; banner_admin_app_17h055cggnm=${token}` }, body: '{}' })
+  const response = await fetch(url + '/api/history', { method: 'POST', headers: { Origin: 'http://127.0.0.1:5190', Cookie: `banner_admin_app_17h055cggnm=${token}`, Authorization: `Bearer ${token}` }, body: '{}' })
   assert.equal(response.status, 200)
-  assert.equal(calls[0].url, 'https://bytedance.feishu.link/app/app_17h055cggnm/api/admin/login')
+  assert.equal(calls[0].url, 'https://bytedance.feishu.link/app/app_17h055cggnm/api/history')
   assert.equal(calls[0].options.headers.get('origin'), 'https://bytedance.feishu.link')
-  assert.equal(calls[0].options.headers.get('cookie'), `banner_admin_app_17h055cggnm=${token}`)
-  assert.doesNotMatch(response.headers.get('set-cookie'), /; Secure/i)
-  assert.match(response.headers.get('set-cookie'), /Path=\/(?:;|$)/)
-  assert.equal((await fetch(url + '/api/admin/logout', { method: 'POST', headers: { Origin: 'https://untrusted.example' } })).status, 403)
+  assert.equal(calls[0].options.headers.get('cookie'), null)
+  assert.equal(calls[0].options.headers.get('authorization'), null)
+  assert.equal(response.headers.get('set-cookie'), null)
+  for (const path of ['/api/admin/login', '/api/admin/logout', '/api/admin/session', '/api/history', '/api/history/00000000-0000-0000-0000-000000000000/files/original']) assert.equal((await fetch(url + path)).status, 404)
   assert.equal((await fetch(url + '/api/__platform__/http-forward')).status, 404)
-  assert.equal((await fetch(url + '/api/admin/logout', { method: 'POST', headers: { Origin: 'http://127.0.0.1:61234' } })).status, 403)
+  assert.equal((await fetch(url + '/api/history', { method: 'POST', headers: { Origin: 'http://127.0.0.1:61234' } })).status, 403)
+  assert.equal((await fetch(url + '/api/history', { method: 'POST', headers: { Origin: 'https://untrusted.example' } })).status, 403)
   assert.equal(calls.length, 1)
-  await fetch(url + '/api/admin/logout', { method: 'POST', headers: { Origin: 'http://127.0.0.1:5190', 'X-CSRF-Token': 'csrf-for-this-session' } })
-  assert.equal(calls[1].options.headers.get('x-csrf-token'), 'csrf-for-this-session')
 })
 
 test('paused archival rejects mixed-case bypasses without contacting the cloud', async t => {

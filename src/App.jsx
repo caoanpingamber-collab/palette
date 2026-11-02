@@ -4,7 +4,7 @@ import PreviewPage from './components/PreviewPage'
 import Grainient from './components/Grainient/Grainient'
 import PatternRefraction from './components/PatternRefraction/PatternRefraction'
 import HistoryAdmin from './components/HistoryAdmin'
-import { archiveInspection, isArchiveEnabled, prepareArchive } from './lib/history.mjs'
+import { approvedAdminUrl, archiveInspection, isArchiveEnabled, prepareArchive } from './lib/history.mjs'
 import { bannerCheck, extract } from './lib/color'
 import { exportReport } from './lib/report'
 import { FIGMA_ASSETS, WIKI_URL } from './lib/figmaAssets'
@@ -377,6 +377,12 @@ function HomePage({ onPickFile, error, loading, onNotice }) {
   )
 }
 
+function AdministratorRoute({ onHome }) {
+  const destination = import.meta.env.VITE_HISTORY_ADMIN_URL
+  useEffect(() => { if (destination) window.location.replace(approvedAdminUrl(destination)) }, [destination])
+  return destination ? <main className="history-app history-loading" role="status">正在打开管理后台</main> : <HistoryAdmin onHome={onHome} />
+}
+
 export default function App() {
   const [page, setPage] = useState(() => /\/admin\/?$/.test(window.location.pathname) ? 'admin' : 'home')
   const [result, setResult] = useState(null)
@@ -553,7 +559,7 @@ export default function App() {
   return (
     <>
       {page === 'home' && <HomePage onPickFile={handleFile} error={error} loading={loading} onNotice={flash} />}
-      {page === 'admin' && <HistoryAdmin onHome={homeFromHistory} />}
+      {page === 'admin' && <AdministratorRoute onHome={homeFromHistory} />}
       {page === 'result' && result && (
         <ResultPage
           result={result}
