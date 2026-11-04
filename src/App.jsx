@@ -401,6 +401,12 @@ export default function App() {
     return () => window.removeEventListener('popstate', onPop)
   }, [])
 
+  useEffect(() => {
+    if (page === 'home' && mode === 'bottom') {
+      void import('./lib/bottomMedia').then(({ preloadBottomOcr }) => preloadBottomOcr()).catch(() => {})
+    }
+  }, [page, mode])
+
   const homeFromHistory = () => {
     window.history.pushState({}, '', window.location.pathname.replace(/\/admin\/?$/, '/') || '/')
     setPage('home')

@@ -6,6 +6,75 @@ import path from 'node:path'
 import { createServer } from 'node:http'
 import { bottomGif, transparentDisposalGif, partialFirstGif } from './bottom-fixtures.mjs'
 
+test('successive OCR jobs reuse only public engine assets and release each image worker', async ({ page }) => {
+  const requests = [], workers = new Set()
+  page.on('request', request => { if (request.url().includes('/ocr/')) requests.push(new URL(request.url()).pathname) })
+  page.on('worker', worker => { workers.add(worker); worker.on('close', () => workers.delete(worker)) })
+  await page.goto('/')
+  const readings = await page.evaluate(async () => {
+    const { recognizeBottomText } = await import('/src/lib/bottomMedia.js')
+    const results = []
+    for (const text of ['Create your next video', 'Win Prizes Now!']) {
+      const canvas = document.createElement('canvas'); canvas.width = 1071; canvas.height = 180
+      const ctx = canvas.getContext('2d'); ctx.fillStyle = '#621fb7'; ctx.fillRect(0, 0, 1071, 180)
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 48px Arial'; ctx.fillText(text, 90, 82)
+      const ocr = await recognizeBottomText(canvas)
+      results.push({ text: ocr.lines.map(line => line.text).join(' '), confidence: ocr.confidence })
+    }
+    return results
+  })
+  expect(readings.map(result => result.text)).toEqual(['Create your next video', 'Win Prizes Now!'])
+  expect(readings.every(result => result.confidence >= 70)).toBe(true)
+  expect(requests.filter(path => path.endsWith('/eng.traineddata.gz'))).toHaveLength(1)
+  expect(requests.filter(path => /tesseract-core-.*\.wasm\.js(?:\.gz)?$/.test(path))).toHaveLength(1)
+  await expect.poll(() => workers.size).toBe(0)
+})
+
+test('choosing Bottom warms public OCR assets without creating an image worker', async ({ page }) => {
+  const requested = [], workers = []
+  page.on('request', request => { if (request.url().includes('/ocr/')) requested.push(request.url()) })
+  page.on('worker', worker => workers.push(worker))
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Bottom banner', exact: true }).click()
+  await expect.poll(() => requested.some(url => url.endsWith('/eng.traineddata.gz'))).toBe(true)
+  expect(workers).toHaveLength(0)
+  expect(await page.locator('input[type=file]').evaluate(input => input.files.length)).toBe(0)
+  await expect(page.getByRole('heading', { name: 'Bottom banner detection' })).toBeVisible()
+})
+
+for (const fallback of ['503', 'HTML']) test(`a failed public model fetch can be retried without a poisoned resource cache (${fallback})`, async ({ page }) => {
+  await page.route('**/ocr/eng.traineddata.gz', route => route.fulfill(fallback === '503' ? { status: 503, body: 'temporary fixture failure' } : { status: 200, contentType: 'text/html', body: '<!doctype html><title>Not a model</title>' }), { times: 1 })
+  await page.goto('/')
+  const result = await page.evaluate(async () => {
+    const { recognizeBottomText } = await import('/src/lib/bottomMedia.js')
+    const canvas = document.createElement('canvas'); canvas.width = 1071; canvas.height = 180
+    const ctx = canvas.getContext('2d'); ctx.fillStyle = '#621fb7'; ctx.fillRect(0, 0, 1071, 180)
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 48px Arial'; ctx.fillText('Create your next video', 90, 82)
+    let failed = false
+    try { await recognizeBottomText(canvas) } catch { failed = true }
+    const next = await recognizeBottomText(canvas)
+    return { failed, text: next.lines.map(line => line.text).join(' ') }
+  })
+  expect(result).toEqual({ failed: true, text: 'Create your next video' })
+})
+
+test('older browsers can cache the original engine when native gzip decompression is absent', async ({ page }) => {
+  await page.addInitScript(() => { window.DecompressionStream = undefined })
+  const engines = []
+  page.on('request', request => { if (request.url().includes('/ocr/tesseract-core-')) engines.push(request.url()) })
+  await page.goto('/')
+  const text = await page.evaluate(async () => {
+    const { recognizeBottomText } = await import('/src/lib/bottomMedia.js')
+    const c = document.createElement('canvas'); c.width = 1071; c.height = 180
+    const ctx = c.getContext('2d'); ctx.fillStyle = '#621fb7'; ctx.fillRect(0, 0, 1071, 180)
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 48px Arial'; ctx.fillText('Create your next video', 90, 82)
+    return (await recognizeBottomText(c)).lines.map(line => line.text).join(' ')
+  })
+  expect(text).toBe('Create your next video')
+  expect(engines).toHaveLength(1)
+  expect(engines[0]).toMatch(/\.wasm\.js$/)
+})
+
 test('Bottom local OCR reads real text with coordinates and no external requests', async ({ page }) => {
   test.setTimeout(60000)
   const external = []

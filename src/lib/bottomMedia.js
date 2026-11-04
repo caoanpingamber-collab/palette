@@ -1,6 +1,7 @@
 import { BOTTOM_RULES, bottomStatus, evaluateBottom, findBottomVisual } from './bottomRules.mjs'
+import { preloadBottomOcr } from './bottomOcrResources'
 
-const localUrl = path => new URL(`${import.meta.env.BASE_URL}${path}`, document.baseURI).href
+export { preloadBottomOcr }
 const canvasOf = (width, height) => Object.assign(document.createElement('canvas'), { width, height })
 const copyCanvas = source => { const canvas = canvasOf(source.width, source.height); canvas.getContext('2d').drawImage(source, 0, 0); return canvas }
 const checkAbort = signal => signal?.throwIfAborted()
@@ -24,15 +25,12 @@ async function withOcrWorker(task, signal) {
   const channel = new BroadcastChannel(`bottom-ocr-${token}`)
   let worker, bootstrapUrl, disposed = false
   try {
-    const { createWorker } = await import('tesseract.js')
+    const [{ createWorker }, resources] = await abortable(Promise.all([import('tesseract.js'), preloadBottomOcr()]), controller.signal)
     checkAbort(controller.signal)
-    const response = await fetch(`${localUrl('ocr/controlled-worker.js')}?job=${token}`, { signal: controller.signal, credentials: 'omit' })
-    if (!response.ok || !/javascript|ecmascript/i.test(response.headers.get('content-type') || '')) throw new Error('文字识别启动脚本加载失败')
-    const source = await abortable(response.text(), controller.signal)
-    const options = JSON.stringify({ job: token, script: localUrl('ocr/worker.min.js') })
-    bootstrapUrl = URL.createObjectURL(new Blob([`self.__bottomOcr=${options};\n`, source], { type: 'application/javascript' }))
+    const options = JSON.stringify({ job: token, script: resources.workerUrl })
+    bootstrapUrl = URL.createObjectURL(new Blob([`self.__bottomOcr=${options};\n`, resources.bootstrap], { type: 'application/javascript' }))
     const pending = createWorker('eng', 1, {
-      workerPath: bootstrapUrl, corePath: localUrl('ocr'), langPath: localUrl('ocr'),
+      workerPath: bootstrapUrl, corePath: resources.coreUrl, langPath: resources.languagePath,
       workerBlobURL: false, cacheMethod: 'none', logger: () => {},
       errorHandler: () => controller.abort(new Error('文字识别加载失败，请人工复核')),
     }).then(value => { if (disposed) void value.terminate(); else worker = value; return value })
