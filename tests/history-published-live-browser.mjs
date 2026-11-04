@@ -26,7 +26,7 @@ try {
   const context = await browser.newContext({ viewport: { width: 1440, height: 960 }, acceptDownloads: true })
   const page = await context.newPage()
   if (process.env.VERIFY_PUBLISHED_SITE === '1') {
-    await page.goto(homeUrl, { waitUntil: 'networkidle', timeout: 60000 })
+    await page.goto(homeUrl, { waitUntil: 'domcontentloaded', timeout: 60000 })
     assert.equal(await page.locator('.home-bg-star').count(), 0, 'Published decorative background must remain hidden')
     const image = await page.evaluate(() => {
       const canvas = document.createElement('canvas'); canvas.width = 800; canvas.height = 1296
@@ -36,19 +36,19 @@ try {
     const saved = page.waitForResponse(response => response.url() === `${apiBase}/api/history` && response.request().method() === 'POST', { timeout: 60000 })
     await page.locator('input[type=file]').setInputFiles({ name: `${prefix}.png`, mimeType: 'image/png', buffer: Buffer.from(image, 'base64') })
     const response = await saved
-    assert.equal(response.status(), 201)
+    assert.equal(response.status(), 201, response.status() === 201 ? '' : await response.text())
     ids.push((await response.json()).id)
     const video = path.join(directory, `${prefix}.mp4`)
     execFileSync(process.env.FFMPEG_PATH || '/opt/homebrew/bin/ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=0x6149a5:s=800x1296:d=2:r=12', '-vf', "drawbox=x=450:y=100:w=200:h=300:color=0x82d5e7:t=fill:enable='lt(t,1)',drawbox=x=30:y=100:w=200:h=300:color=0x82d5e7:t=fill:enable='gte(t,1)'", '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '30', '-pix_fmt', 'yuv420p', video])
-    await page.goto(homeUrl, { waitUntil: 'networkidle' })
+    await page.goto(homeUrl, { waitUntil: 'domcontentloaded' })
     const savedVideo = page.waitForResponse(value => value.url() === `${apiBase}/api/history` && value.request().method() === 'POST', { timeout: 60000 })
     await page.locator('input[type=file]').setInputFiles(video)
     const videoResponse = await savedVideo
-    assert.equal(videoResponse.status(), 201)
+    assert.equal(videoResponse.status(), 201, videoResponse.status() === 201 ? '' : await videoResponse.text())
     ids.push((await videoResponse.json()).id)
     for (const id of ids) assert.equal((await repository.raw(id)).state, 'ready')
   }
-  const adminResponse = await page.goto(`${apiBase}/admin`, { waitUntil: 'networkidle', timeout: 60000 })
+  const adminResponse = await page.goto(`${apiBase}/admin`, { waitUntil: 'domcontentloaded', timeout: 60000 })
   const csp = adminResponse.headers()['content-security-policy'] || ''
   assert.match(csp, /sandbox allow-scripts allow-forms allow-downloads/)
   assert.doesNotMatch(csp, /allow-same-origin|script-src-elem/)
@@ -97,7 +97,7 @@ try {
   await page.getByRole('heading', { name: '管理员登录' }).waitFor()
   assert.equal((await revoked).status(), 204)
   assert.equal((await context.request.get(`${apiBase}/api/history`, { headers })).status(), 401)
-  await page.goto(homeUrl, { waitUntil: 'networkidle' })
+  await page.goto(homeUrl, { waitUntil: 'domcontentloaded' })
   const scriptUrl = await page.locator('script[type="module"][src]').first().evaluate(element => element.src)
   const scriptResponse = await context.request.head(scriptUrl)
   assert.equal(scriptResponse.headers()['service-worker-allowed'], undefined, 'Static application must not grant a wider service-worker scope')
@@ -113,7 +113,7 @@ try {
   assert.equal(await page.evaluate(() => { try { return Boolean(window.__sameHostProbe.document.querySelector('input')) } catch { return false } }), false)
   await popup.close()
   if (process.env.VERIFY_PUBLISHED_SITE === '1') {
-    await page.goto(`${homeUrl}/admin`, { waitUntil: 'networkidle' })
+    await page.goto(`${homeUrl}/admin`, { waitUntil: 'domcontentloaded' })
     await page.waitForURL(`${apiBase}/admin`)
     assert.equal(await page.evaluate(() => window.origin), 'null')
   }
@@ -122,8 +122,11 @@ try {
   // Logout revokes the test session; cleanup uses another short operator session.
   const cleanup = randomBytes(32).toString('hex'), cleanupCsrf = randomBytes(32).toString('hex')
   try {
-    if (ids.length) {
+    {
       assert.ok(await repository.saveSession(digest(cleanup), cleanupCsrf, Date.now() + 120000))
+      const listed = await fetch(`${apiBase}/api/history?q=${encodeURIComponent(prefix)}`, { headers: { Authorization: `Bearer ${cleanup}` }, redirect: 'error', signal: AbortSignal.timeout(45000) })
+      assert.equal(listed.status, 200)
+      for (const record of (await listed.json()).records) if (record.fileName.startsWith(prefix) && !ids.includes(record.id)) ids.push(record.id)
       for (const id of ids) {
         const response = await fetch(`${apiBase}/api/history/${id}`, { method: 'DELETE', headers: { Origin: new URL(apiBase).origin, Authorization: `Bearer ${cleanup}`, 'X-CSRF-Token': cleanupCsrf }, redirect: 'error', signal: AbortSignal.timeout(45000) })
         assert.equal(response.status, 204, 'Synthetic cloud record cleanup failed')

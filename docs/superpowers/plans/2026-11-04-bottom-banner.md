@@ -1,5 +1,7 @@
 # Bottom Banner Inspection Implementation Plan
 
+Historical implementation milestone. The user's later GitHub/publication request is recorded in `2026-11-04-bottom-banner-publication.md`; that document supersedes the local-only publication boundary below.
+
 > **For agentic workers:** Use superpowers:executing-plans and test-driven-development inline. User requires the existing checkout; do not create a worktree or project copy. Final whole-change review is read-only.
 
 **Goal:** Add the approved Bottom Banner mode with independent Figma rules, matching existing preview/results and supporting safe history snapshots.

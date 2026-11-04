@@ -1,6 +1,6 @@
 # Bottom Banner Inspection Design
 
-Status: Approved scope with the user's explicit exclusion of font and font-size detection. Implement inline in the existing checkout; no project copy or deployment.
+Status: Approved scope with the user's explicit exclusion of font and font-size detection. Implemented inline in the existing checkout; no project copy. The original implementation milestone excluded deployment; the later explicit publication request is completed and recorded in `../plans/2026-11-04-bottom-banner-publication.md`.
 
 ## Intent and Source of Truth
 
@@ -66,7 +66,7 @@ Keep Header result semantics and the existing `color.js` detector unchanged. Add
 
 Bottom rows cover file/canvas, copy length, line count, text position, visual circle and thumbnail crop. There is no typography check. Distinguish pass/fail/review. A pending review must not produce `Approved` or be indistinguishable from a measured failure.
 
-Current server snapshot v1 requires exactly the five Header keys, Header metrics and a300000-byte image limit. Introduce a validated Bottom snapshot version rather than weakening v1 or fabricating Header metric values. Retain v1 read/upload compatibility. Save the actual rule version, applicable constants, frame-specific checks and evidence, and restore Bottom previews without rerunning current rules over old records.
+At design time, server snapshot v1 required exactly the five Header keys, Header metrics and a300000-byte image limit. The implementation introduced a validated Bottom snapshot version rather than weakening v1 or fabricating Header metric values. Retain v1 read/upload compatibility. Save the actual rule version, applicable constants, frame-specific checks and evidence, and restore Bottom previews without rerunning current rules over old records.
 
 GIF originals remain image/gif private objects. Animated frame metadata and first/last assets must have an explicit validated contract so that treating them as either ordinary static images or MP4s cannot bypass size/type/asset validation. Admin original download and rendering must retain the GIF, not substitute a rasterized frame.
 

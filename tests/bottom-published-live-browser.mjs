@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict'
 import { randomBytes, randomUUID } from 'node:crypto'
-import { chromium, expect } from '@playwright/test'
+import { chromium, expect as baseExpect } from '@playwright/test'
 import { digest } from '../server/digest.mjs'
 import { MiaodaSql } from '../server/miaoda-client.mjs'
 import { MiaodaRepository } from '../server/miaoda-repository.mjs'
 import { bottomGif } from './bottom-fixtures.mjs'
+
+const expect = baseExpect.configure({ timeout: 45000 })
 
 if (process.env.RUN_BOTTOM_PUBLISHED !== '1') throw new Error('Explicit RUN_BOTTOM_PUBLISHED=1 is required; writes synthetic online records')
 const appId = process.env.HISTORY_MIAODA_APP_ID
@@ -30,7 +32,11 @@ try {
   page.on('console', message => { if (['error', 'warning'].includes(message.type())) console.log(JSON.stringify({ browser: message.type(), message: message.text().slice(0, 700) })) })
   page.on('pageerror', error => console.log(JSON.stringify({ pageError: error.message })))
   page.on('requestfailed', request => console.log(JSON.stringify({ failedResource: request.url().split('?')[0], error: request.failure()?.errorText })))
-  page.on('response', response => { if (response.status() >= 400) console.log(JSON.stringify({ responseError: response.url().split('?')[0], status: response.status() })) })
+  page.on('response', async response => {
+    if (response.status() < 400) return
+    const error = response.url().startsWith(`${apiBase}/api/`) ? await response.json().then(body => body.error).catch(() => 'Non-JSON response') : undefined
+    console.log(JSON.stringify({ responseError: response.url().split('?')[0], status: response.status(), error }))
+  })
   await page.goto(homeUrl, { waitUntil: 'domcontentloaded', timeout: 60000 })
   await expect(page.locator('.home-bg-star')).toHaveCount(0)
   await page.getByRole('button', { name: 'Bottom banner', exact: true }).click()
@@ -44,20 +50,22 @@ try {
     return canvas.toDataURL().split(',')[1]
   })
   async function upload(file) {
+    const started = Date.now()
     console.log(JSON.stringify({ stage: 'upload', kind: file.mimeType }))
     const saved = page.waitForResponse(response => response.url() === `${uploadBase}/api/history` && response.request().method() === 'POST', { timeout: 90000 })
     await page.locator('input[type=file]').setInputFiles(file)
     const response = await saved
     assert.equal(response.status(), 201)
     const { id } = await response.json(); ids.add(id)
-    console.log(JSON.stringify({ stage: 'archived', kind: file.mimeType }))
+    console.log(JSON.stringify({ stage: 'archived', kind: file.mimeType, elapsedMs: Date.now() - started }))
     return id
   }
   const pngId = await upload({ name: `${prefix}.png`, mimeType: 'image/png', buffer: Buffer.from(png, 'base64') })
+  const first = await repository.raw(pngId)
+  console.log(JSON.stringify({ stage: 'png-evidence', confidence: first.manifest.result.frames.first.evidence.ocr.confidence, lines: first.manifest.result.frames.first.evidence.ocr.lines.length }))
   await expect(page.getByRole('heading', { name: 'Approved', exact: true })).toBeVisible()
   await expect(page.getByText('44/57', { exact: true })).toBeVisible()
   await expect(page.getByText(/字体|字号/)).toHaveCount(0)
-  const first = await repository.raw(pngId)
   assert.equal(first.manifest.version, 2)
   assert.equal(first.manifest.result.frames.first.evidence.ocr.lines.length, 2)
   assert.equal(first.manifest.result.frames.first.uiChecks.find(row => row.key === 'copy').status, true)
@@ -81,6 +89,12 @@ try {
   assert.equal(savedGif.manifest.animated, true)
   assert.equal(savedGif.manifest.result.frames.first.uiChecks.find(row => row.key === 'composition').status, true)
   assert.equal(savedGif.manifest.result.frames.last.uiChecks.find(row => row.key === 'composition').status, false)
+  for (const id of [pngId, gifId]) for (const file of ['thumbnail', 'original']) {
+    const response = await api(`/api/history/${id}/files/${file}`)
+    assert.equal(response.status, 200, response.status === 200 ? '' : await response.text())
+    assert.ok((await response.arrayBuffer()).byteLength > 0)
+  }
+  console.log(JSON.stringify({ stage: 'private-bytes-verified' }))
   assert.equal((await fetch(`${apiBase}/api/history/${gifId}/files/original`)).status, 401)
   const adminResponse = await page.goto(`${apiBase}/admin`, { waitUntil: 'domcontentloaded' })
   assert.match(adminResponse.headers()['content-security-policy'], /sandbox allow-scripts allow-forms allow-downloads/)

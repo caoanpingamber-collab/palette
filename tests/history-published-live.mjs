@@ -40,6 +40,18 @@ try {
   const original = await request(`/api/history/${id}/files/original`, { headers })
   assert.equal(original.status, 200, 'private download failed')
   assert.deepEqual(Buffer.from(await original.arrayBuffer()), png)
+  if (process.env.VERIFY_PRIVATE_READ_BURST === '1') {
+    for (let wave = 0; wave < 3; wave++) {
+      const reads = await Promise.all(Array.from({ length: 6 }, async (_, index) => {
+        const name = ['original', 'first', 'thumbnail'][index % 3]
+        const response = await request(`/api/history/${id}/files/${name}`, { headers })
+        const bytes = Buffer.from(await response.arrayBuffer())
+        return { name, status: response.status, matches: bytes.equals(png), error: response.ok ? undefined : bytes.toString('utf8').slice(0, 600) }
+      }))
+      console.log(JSON.stringify({ privateReadWave: wave, reads }))
+      assert.ok(reads.every(read => read.status === 200 && read.matches), 'Concurrent private cloud reads failed')
+    }
+  }
   const range = await request(`/api/history/${id}/files/original`, { headers: { ...headers, Range: 'bytes=0-7' } })
   assert.equal(range.status, 206)
   assert.equal((await range.arrayBuffer()).byteLength, 8)
