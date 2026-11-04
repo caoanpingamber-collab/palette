@@ -1,0 +1,110 @@
+import { test, expect, request } from '@playwright/test'
+import { bottomGif } from './bottom-fixtures.mjs'
+
+test.afterAll(async () => {
+  const api = await request.newContext({ baseURL: 'http://127.0.0.1:5194', extraHTTPHeaders: { Origin: 'http://127.0.0.1:5194' } })
+  try {
+    const login = await api.post('/api/admin/login', { data: { username: 'test-admin', password: 'browser-test-password-123' } })
+    expect(login.status()).toBe(200)
+    const { csrfToken } = await login.json()
+    const { records } = await (await api.get('/api/history?q=bottom-')).json()
+    for (const record of records.filter(record => record.fileName.startsWith('bottom-'))) expect((await api.delete(`/api/history/${record.id}`, { headers: { 'X-CSRF-Token': csrfToken } })).status()).toBe(204)
+    await api.post('/api/admin/logout', { headers: { 'X-CSRF-Token': csrfToken } })
+  } finally { await api.dispose() }
+})
+
+async function source(page, { width = 1071, visualX = 860 } = {}) {
+  return page.evaluate(({ width, visualX }) => {
+    const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = 180
+    const ctx = canvas.getContext('2d'); ctx.fillStyle = '#621fb7'; ctx.fillRect(0, 0, width, 180)
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 48px Arial'; ctx.fillText('Create your next video', 90, 82)
+    ctx.fillStyle = '#22dddd'; ctx.beginPath(); ctx.arc(visualX, 90, 45, 0, Math.PI * 2); ctx.fill()
+    return canvas.toDataURL().split(',')[1]
+  }, { width, visualX })
+}
+
+test('Bottom mode preserves the existing shell, applies new rules, previews and reports without typography checks', async ({ page }) => {
+  test.setTimeout(60000)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Bottom banner', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Bottom banner detection' })).toBeVisible()
+  await expect(page.getByText('Upload a 1071*180 banner material', { exact: true })).toBeVisible()
+  const bytes = await source(page)
+  const saved = page.waitForResponse(response => response.url().endsWith('/api/history') && response.request().method() === 'POST')
+  await page.locator('input[type=file]').setInputFiles({ name: 'bottom-valid.png', mimeType: 'image/png', buffer: Buffer.from(bytes, 'base64') })
+  await expect(page.getByRole('heading', { name: 'Approved', exact: true })).toBeVisible({ timeout: 30000 })
+  expect(await page.locator('.bottom-phone-time').count()).toBe(1)
+  await expect(page.getByText('Bilingual captions', { exact: true })).toBeVisible()
+  expect((await saved).status()).toBe(201)
+  await expect(page.getByText('文案字数检测', { exact: true })).toBeVisible()
+  await expect(page.getByText('主视觉构图检测', { exact: true })).toBeVisible()
+  await expect(page.getByText(/字体|字号|色相检测|灰度明度检测|卡片上缘/)).toHaveCount(0)
+  await expect(page.locator('[data-bottom-variant="full"]')).toBeVisible()
+  const tools = page.locator('.bottom-phone-layer').nth(2)
+  expect(await tools.evaluate(img => Math.abs(img.getBoundingClientRect().width / img.getBoundingClientRect().height - img.naturalWidth / img.naturalHeight))).toBeLessThan(.01)
+  await page.screenshot({ path: 'test-results/bottom-full-desktop.png', fullPage: true })
+  await page.getByRole('button', { name: '下一张', exact: true }).click()
+  await expect(page.locator('[data-bottom-variant="thumbnail"]')).toBeVisible()
+  const circle = await page.locator('[data-bottom-slot="thumbnail"]').boundingBox()
+  expect(Math.abs(circle.width - circle.height)).toBeLessThan(.1)
+  const preview = page.waitForEvent('download')
+  await page.getByRole('button', { name: '下载预览', exact: true }).click()
+  const exported = await preview
+  expect(exported.suggestedFilename()).toMatch(/bottom.*preview/)
+  await exported.saveAs('test-results/bottom-preview-export.png')
+  const report = page.waitForEvent('download')
+  await page.getByRole('button', { name: '导出报告', exact: true }).click()
+  const exportedReport = await report
+  expect(exportedReport.suggestedFilename()).toMatch(/bottom-banner-report/)
+  await exportedReport.saveAs('test-results/bottom-report-export.jpg')
+  await expect(page.getByText('报告已导出', { exact: true })).toHaveCount(0)
+  await page.screenshot({ path: 'test-results/bottom-valid-desktop.png', fullPage: true })
+  await page.getByRole('button', { name: '关闭结果页' }).click()
+  await expect(page.getByRole('heading', { name: 'Bottom banner detection' })).toBeVisible()
+  await page.getByRole('button', { name: 'Header Banner', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Homepage Banner Detection' })).toBeVisible()
+})
+
+test('Bottom invalid dimensions are reported, while mobile preview and controls stay inside viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Bottom banner', exact: true }).click()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  const bytes = await source(page, { width: 1000 })
+  await page.locator('input[type=file]').setInputFiles({ name: 'bottom-wrong-size.png', mimeType: 'image/png', buffer: Buffer.from(bytes, 'base64') })
+  await expect(page.getByRole('heading', { name: 'Not Passed', exact: true })).toBeVisible()
+  await expect(page.getByText('1000×180', { exact: true })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await page.screenshot({ path: 'test-results/bottom-invalid-mobile.png', fullPage: true })
+})
+
+test('Bottom GIF remains animated when changing its independent first and last results and is restorable in admin', async ({ page }) => {
+  test.setTimeout(60000)
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Bottom banner', exact: true }).click()
+  const saved = page.waitForResponse(response => response.url().endsWith('/api/history') && response.request().method() === 'POST')
+  await page.locator('input[type=file]').setInputFiles({ name: 'bottom-moving.gif', mimeType: 'image/gif', buffer: bottomGif() })
+  expect((await saved).status()).toBe(201)
+  const original = page.getByAltText('Bottom Banner 完整预览')
+  const url = await original.getAttribute('src')
+  await page.getByRole('button', { name: '查看尾帧', exact: true }).click()
+  expect(await original.getAttribute('src')).toBe(url)
+  // drawImage(HTMLImageElement) uses the GIF's default frame; compare the browser's rendered pixels instead.
+  const before = await original.screenshot()
+  await expect.poll(async () => (await original.screenshot()).equals(before), { intervals: [110], timeout: 3000 }).toBe(false)
+  const download = page.waitForEvent('download')
+  await page.getByRole('button', { name: '下载banner', exact: true }).click()
+  expect((await download).suggestedFilename()).toBe('bottom-moving.gif')
+  await page.goto('/admin')
+  await page.getByLabel('账号', { exact: true }).fill('test-admin')
+  await page.getByLabel('密码', { exact: true }).fill('browser-test-password-123')
+  await page.getByRole('button', { name: '登录', exact: true }).click()
+  await page.getByRole('button', { name: 'bottom-moving.gif', exact: true }).click()
+  await expect(page.getByText(/Bottom Banner · GIF 动图/)).toBeVisible()
+  await expect(page.getByRole('img', { name: '检测原图' })).toBeVisible()
+  await page.getByRole('button', { name: /尾帧/ }).click()
+  await expect(page.getByRole('heading', { name: '尾帧检测结果', exact: true })).toBeVisible()
+  await expect(page.getByText('检测规则 bottom-banner-qc-v1', { exact: true })).toBeVisible()
+  await expect(page.getByText(/字体|字号/)).toHaveCount(0)
+})

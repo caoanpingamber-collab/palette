@@ -13,6 +13,7 @@ export default defineConfig({
     __APP_BUILD_VERSION__: JSON.stringify(buildVersion),
   },
   plugins: [react(), tailwindcss()],
+  optimizeDeps: { include: ['tesseract.js', 'gifuct-js'] },
   build: {
     rollupOptions: {
       output: {

@@ -87,7 +87,7 @@ export class CloudHistoryStore {
     return {
       records: rows.map(row => ({
         id: row.id, fileName: row.manifest.fileName, kind: row.manifest.kind,
-        overallPass: row.manifest.result.overallPass, inspectedAt: row.manifest.inspectedAt,
+        overallPass: row.manifest.result.overallPass, overallStatus: row.manifest.result.overallStatus, inspectionType: row.manifest.inspectionType, inspectedAt: row.manifest.inspectedAt,
         createdAt: row.createdAt, bytes: row.bytes,
         issues: [...new Set(Object.values(row.manifest.result.frames).flatMap(frame => frame.uiChecks.filter(check => !check.status).map(check => check.issue)))],
         thumbnailUrl: `/api/history/${row.id}/files/thumbnail`,

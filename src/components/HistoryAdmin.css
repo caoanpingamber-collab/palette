@@ -131,3 +131,4 @@
   .history-meta { margin-bottom: 16px; }
 }
 @media (prefers-reduced-motion: reduce) { .history-spin { animation: none; } }
+.history-status.is-review { color: #986c0d; background: #c28a151f; }

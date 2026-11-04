@@ -9,6 +9,7 @@ import { bannerCheck, extract } from './lib/color'
 import { exportReport } from './lib/report'
 import { FIGMA_ASSETS, WIKI_URL } from './lib/figmaAssets'
 import { gsap, useGSAP } from './lib/gsap'
+import { downloadBottomPreview } from './lib/bottomPreview'
 import {
   LIMITS,
   buildFrameResult,
@@ -92,7 +93,7 @@ function Logo() {
   )
 }
 
-function HomePage({ onPickFile, error, loading, onNotice }) {
+function HomePage({ onPickFile, error, loading, onNotice, mode, onModeChange }) {
   const inputId = 'banner-qc-file-input'
   const rootRef = useRef(null)
   const tabsRef = useRef(null)
@@ -103,7 +104,7 @@ function HomePage({ onPickFile, error, loading, onNotice }) {
   const uploadHintTimerRef = useRef(null)
   const spotXToRef = useRef(null)
   const spotYToRef = useRef(null)
-  const [activeTab, setActiveTab] = useState('header')
+  const activeTab = mode
   const [uploadVisualActive, setUploadVisualActive] = useState(false)
 
   const { contextSafe } = useGSAP(
@@ -148,7 +149,8 @@ function HomePage({ onPickFile, error, loading, onNotice }) {
       if (!tabIndicatorRef.current) return
       const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
       gsap.to(tabIndicatorRef.current, {
-        x: activeTab === 'mini' ? 195 : 0,
+        x: 0,
+        xPercent: activeTab === 'bottom' ? 100 : 0,
         duration: reduceMotion ? 0 : 0.42,
         ease: 'power3.inOut',
         overwrite: 'auto',
@@ -174,8 +176,7 @@ function HomePage({ onPickFile, error, loading, onNotice }) {
     }
   }
   const pickTab = (tab) => {
-    setActiveTab(tab)
-    if (tab === 'mini') onNotice?.('Mini-tool Operations 的流程 Figma 未标注，等待你确认后接入')
+    if (!loading) onModeChange(tab)
   }
   const moveUploadSpot = contextSafe((e) => {
     const rect = uploadRef.current?.getBoundingClientRect()
@@ -223,7 +224,7 @@ function HomePage({ onPickFile, error, loading, onNotice }) {
   }
 
   return (
-    <main ref={rootRef} className="relative min-h-screen overflow-hidden bg-[#f1f1f1] text-[#111827]">
+    <main ref={rootRef} className={`${mode === 'bottom' ? 'bottom-home ' : ''}relative min-h-screen overflow-hidden bg-[#f1f1f1] text-[#111827]`}>
       {import.meta.env.VITE_HIDE_DECORATIVE_BACKGROUND !== 'true' && <>
       <PatternRefraction
         src={FIGMA_ASSETS.bgStar}
@@ -272,21 +273,21 @@ function HomePage({ onPickFile, error, loading, onNotice }) {
           </button>
           <button
             type="button"
-            onClick={() => pickTab('mini')}
-            aria-pressed={activeTab === 'mini'}
+            onClick={() => pickTab('bottom')}
+            aria-pressed={activeTab === 'bottom'}
             className={`relative z-10 h-11 w-[195px] rounded-full font-['PingFang_SC'] text-[17px] outline-none transition-[color,transform] duration-200 hover:-translate-y-0.5 active:translate-y-0 active:scale-[.98] focus-visible:ring-2 focus-visible:ring-black/15 ${
-              activeTab === 'mini' ? 'font-normal text-[#111827]' : 'font-light text-black/55 hover:text-black/75'
+              activeTab === 'bottom' ? 'font-normal text-[#111827]' : 'font-light text-black/55 hover:text-black/75'
             }`}
           >
-            Mini-tool Operations
+            Bottom banner
           </button>
         </div>
 
         <h1 className="home-title whitespace-nowrap font-['Floane'] text-[60px] font-bold leading-[1.2] tracking-[1px] will-change-transform max-[760px]:text-[42px]">
-          <span className="inline-block -skew-x-12">Homepage Banner Detection</span>
+          <span className="inline-block -skew-x-12">{mode === 'bottom' ? 'Bottom banner detection' : 'Homepage Banner Detection'}</span>
         </h1>
         <p className="home-subtitle mt-3 font-['PingFang_SC'] text-[14px] font-light will-change-transform">
-          Check specifications after uploading 800×1296 banner materials
+          {mode === 'bottom' ? 'Upload a 1071*180 banner material' : 'Check specifications after uploading 800×1296 banner materials'}
         </p>
 
         <label
@@ -346,15 +347,15 @@ function HomePage({ onPickFile, error, loading, onNotice }) {
               uploadVisualActive ? 'text-white' : 'text-[#111827]'
             }`}
           >
-            <span className="text-[19px]">{loading ? '检测中...' : '上传图片或视频'}</span>
+            <span className="text-[19px]">{loading ? '检测中...' : mode === 'bottom' ? '上传banner' : '上传图片或视频'}</span>
             <span className={`text-[14px] transition-opacity duration-200 ${uploadVisualActive ? 'opacity-70' : 'opacity-40'}`}>
-              图片≤300KB · 视频≤500KB
+              {mode === 'bottom' ? 'GIF图大小不超过500kb' : '图片≤300KB · 视频≤500KB'}
             </span>
           </div>
           <input
             id={inputId}
             type="file"
-            accept="image/png,image/jpeg,image/jpg,image/webp,image/gif,video/mp4"
+            accept={mode === 'bottom' ? 'image/png,image/jpeg,image/webp,image/gif' : 'image/png,image/jpeg,image/jpg,image/webp,image/gif,video/mp4'}
             className="home-upload-input absolute inset-0 z-20 h-full w-full cursor-pointer opacity-0 border-0 border-solid border-[rgb(234,179,8)] disabled:cursor-wait"
             disabled={loading}
             onPointerEnter={showUploadGlow}
@@ -367,7 +368,7 @@ function HomePage({ onPickFile, error, loading, onNotice }) {
               submitFile(e.target.files[0])
               e.target.value = ''
             }}
-            aria-label="上传图片或视频"
+            aria-label={mode === 'bottom' ? '上传banner' : '上传图片或视频'}
           />
         </label>
 
@@ -386,11 +387,13 @@ function AdministratorRoute({ onHome }) {
 export default function App() {
   const [page, setPage] = useState(() => /\/admin\/?$/.test(window.location.pathname) ? 'admin' : 'home')
   const [result, setResult] = useState(null)
+  const [mode, setMode] = useState('header')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState('')
   const videoUrlRef = useRef(null)
   const toastTimerRef = useRef(null)
+  const analysisAbortRef = useRef(null)
 
   useEffect(() => {
     const onPop = () => setPage(/\/admin\/?$/.test(window.location.pathname) ? 'admin' : 'home')
@@ -404,7 +407,7 @@ export default function App() {
   }
   const beginArchive = async (file, nextResult) => {
     try {
-      if (!await isArchiveEnabled()) return
+      if (!await isArchiveEnabled(nextResult.inspectionType === 'bottom' ? 2 : 1)) return
       await archiveInspection(await prepareArchive(file, nextResult))
     } catch (failure) {
       console.warn('检测历史保存失败：', failure.message)
@@ -430,6 +433,7 @@ export default function App() {
   useEffect(
     () => () => {
       releaseVideoUrl()
+      analysisAbortRef.current?.abort()
       if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current)
     },
     [],
@@ -448,7 +452,7 @@ export default function App() {
     }
     window.addEventListener('paste', onPaste)
     return () => window.removeEventListener('paste', onPaste)
-  }, [page])
+  }, [page, mode, loading])
 
   const handleFile = async (file) => {
     if (!file || loading) return
@@ -458,6 +462,17 @@ export default function App() {
     const isImage = /^image\//.test(file.type)
     const isVideo = /^video\/mp4$/.test(file.type) || /\.mp4$/i.test(file.name || '')
     try {
+      if (mode === 'bottom') {
+        releaseVideoUrl()
+        const controller = new AbortController()
+        analysisAbortRef.current = controller
+        const { analyzeBottomFile } = await import('./lib/bottomMedia')
+        const nextResult = await analyzeBottomFile(file, { signal: controller.signal })
+        controller.signal.throwIfAborted()
+        videoUrlRef.current = nextResult.mediaUrl
+        setResult(nextResult); setPage('result'); void beginArchive(file, nextResult)
+        return
+      }
       if (!isImage && !isVideo) throw new Error('只支持图片或 MP4 视频')
       if (isImage && file.size > LIMITS.imageBytes) throw new Error(`图片 ${(file.size / 1000).toFixed(0)}KB 超出上限 300KB，请压缩后再传`)
       if (isVideo && file.size > LIMITS.videoBytes) throw new Error(`视频 ${(file.size / 1000).toFixed(0)}KB 超出上限 500KB，请压缩后再传`)
@@ -507,7 +522,7 @@ export default function App() {
 
   const switchFrame = (which) => {
     setResult((prev) => {
-      if (!prev || prev.kind !== 'video' || !prev.frames?.[which]) return prev
+      if (!prev || (prev.kind !== 'video' && !prev.animated) || !prev.frames?.[which]) return prev
       const frame = prev.frames[which]
       return {
         ...prev,
@@ -522,13 +537,18 @@ export default function App() {
   const downloadBanner = () => {
     const frame = currentFrame(result)
     if (!result || !frame) return
+    if (result.inspectionType === 'bottom') { downloadHref(result.mediaUrl, result.fileName); return }
     if (result.kind === 'video') downloadHref(result.videoUrl, result.fileName || 'banner.mp4')
     else downloadHref(frame.src, 'banner.png')
   }
 
-  const downloadPreview = () => {
+  const downloadPreview = async (variant) => {
     const frame = currentFrame(result)
     if (!result || !frame) return
+    if (result.inspectionType === 'bottom') {
+      try { await downloadBottomPreview(frame, variant) } catch { flash('预览导出失败') }
+      return
+    }
     if (result.kind === 'video') downloadHref(result.videoUrl, result.fileName || 'banner-preview.mp4')
     else downloadHref(frame.src, 'banner-preview.png')
   }
@@ -558,7 +578,7 @@ export default function App() {
 
   return (
     <>
-      {page === 'home' && <HomePage onPickFile={handleFile} error={error} loading={loading} onNotice={flash} />}
+      {page === 'home' && <HomePage onPickFile={handleFile} error={error} loading={loading} onNotice={flash} mode={mode} onModeChange={(next) => { setMode(next); setError('') }} />}
       {page === 'admin' && <AdministratorRoute onHome={homeFromHistory} />}
       {page === 'result' && result && (
         <ResultPage

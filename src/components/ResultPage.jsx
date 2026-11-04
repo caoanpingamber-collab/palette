@@ -5,6 +5,8 @@ import { PreviewPage3Frame } from './PreviewPage3'
 import { currentFrame } from '../lib/analysis'
 import { FIGMA_ASSETS } from '../lib/figmaAssets'
 import { gsap, useGSAP } from '../lib/gsap'
+import BottomPreview from './BottomPreview'
+import { bottomPreviewPoint } from '../lib/bottomRules.mjs'
 
 const PREVIEW_SIZE = { width: 320, height: 694 }
 const LAST_PREVIEW_INDEX = 2
@@ -32,13 +34,14 @@ function Logo() {
 }
 
 function StatusPill({ pass }) {
+  const review = pass == null
   return (
     <span
       className={`inline-flex h-[18px] items-center rounded-[5px] px-1 text-[11px] font-medium ${
-        pass ? 'bg-[#00ae701f] text-[#00ae70]' : 'bg-[#ff61631f] text-[#ff3436]'
+        review ? 'bg-[#c28a151f] text-[#986c0d]' : pass ? 'bg-[#00ae701f] text-[#00ae70]' : 'bg-[#ff61631f] text-[#ff3436]'
       }`}
     >
-      {pass ? '通过' : '不通过'}
+      {review ? '需复核' : pass ? '通过' : '不通过'}
     </span>
   )
 }
@@ -155,7 +158,7 @@ function ResultRows({ frame, compact = false }) {
 }
 
 function FrameSwitcher({ result, onSwitchFrame }) {
-  if (result.kind !== 'video') return null
+  if (result.kind !== 'video' && !result.animated) return null
   return (
     <div className="result-content-animate flex items-start gap-2 px-5 py-3">
       {['first', 'last'].map((key) => {
@@ -180,7 +183,11 @@ function FrameSwitcher({ result, onSwitchFrame }) {
   )
 }
 
-function buildIssueMarkers(frame) {
+function buildIssueMarkers(frame, variant) {
+  if (frame?.inspectionType === 'bottom') return (frame.failed || []).filter(item => item.anchor).map(item => {
+    const point = bottomPreviewPoint(item.anchor, variant)
+    return { id: item.key, ...point, side: point.x > 160 ? 'left' : 'right', label: item.label.replace('检测', '不符合规范') }
+  })
   const markers = []
   const pushMarker = (id, marker) => {
     if (!marker) return
@@ -228,9 +235,9 @@ function buildIssueMarkers(frame) {
   return markers
 }
 
-function IssueMarkers({ frame, overallPass }) {
+function IssueMarkers({ frame, overallPass, variant }) {
   if (overallPass || !frame?.failed?.length) return null
-  const markers = buildIssueMarkers(frame)
+  const markers = buildIssueMarkers(frame, variant)
   return (
     <div className="pointer-events-none absolute inset-0">
       {markers.map((marker, index) => {
@@ -279,10 +286,13 @@ export default function ResultPage({
   const [previewScale, setPreviewScale] = useState(1)
   const [previewIndex, setPreviewIndex] = useState(0)
   const frame = currentFrame(result)
+  const isBottom = result.inspectionType === 'bottom'
+  const previewVariant = previewIndex === 0 ? 'full' : 'thumbnail'
+  const lastPreviewIndex = isBottom ? 1 : LAST_PREVIEW_INDEX
   const isPassed = Boolean(result?.overallPass)
-  const title = isPassed ? 'Approved' : 'Not Passed'
+  const title = isPassed ? 'Approved' : result.overallStatus === 'review' ? 'Needs Review' : 'Not Passed'
   const description = isPassed
-    ? '头部banner已通过冷色相册检测、chroma色感检测、WCAG对比度检测、画面构图重心检测'
+    ? isBottom ? '底部banner已通过尺寸、文件大小、文案字数、行数、位置及圆形视觉区检测' : '头部banner已通过冷色相册检测、chroma色感检测、WCAG对比度检测、画面构图重心检测'
     : result.recommendation
 
   useGSAP(
@@ -364,7 +374,7 @@ export default function ResultPage({
   }, [previewIndex])
 
   const hasPreviousPreview = previewIndex > 0
-  const hasNextPreview = previewIndex < LAST_PREVIEW_INDEX
+  const hasNextPreview = previewIndex < lastPreviewIndex
   const arrowButtonClass = (enabled) =>
     `grid size-10 place-items-center rounded-full outline-none transition-[background-color,opacity,transform] duration-200 focus-visible:ring-2 focus-visible:ring-black/15 ${
       enabled ? 'opacity-100 hover:scale-105 hover:bg-white/70 active:scale-95' : 'cursor-default opacity-20'
@@ -383,11 +393,11 @@ export default function ResultPage({
       onNeedsConfirmation?.('已经是最后一个预览')
       return
     }
-    setPreviewIndex((current) => Math.min(LAST_PREVIEW_INDEX, current + 1))
+    setPreviewIndex((current) => Math.min(lastPreviewIndex, current + 1))
   }
 
   return (
-    <main ref={rootRef} className="relative min-h-screen overflow-hidden bg-[#f1f1f1] text-[#111827]">
+    <main ref={rootRef} className={`${isBottom ? 'bottom-result ' : ''}relative min-h-screen overflow-hidden bg-[#f1f1f1] text-[#111827]`}>
       <img
         src={FIGMA_ASSETS.bgStar}
         alt=""
@@ -439,7 +449,12 @@ export default function ResultPage({
               }}
             >
               <div ref={previewContentRef} className="h-full w-full">
-                {previewIndex === 0 ? (
+                {isBottom ? (
+                  <>
+                    <BottomPreview src={result.mediaUrl || frame?.src} variant={previewVariant} frame={frame} />
+                    <IssueMarkers frame={frame} overallPass={isPassed} variant={previewVariant} />
+                  </>
+                ) : previewIndex === 0 ? (
                   <>
                     <Preview src={frame?.src} video={result.kind === 'video' ? result.videoUrl : null} V={frame?.V} />
                     <IssueMarkers frame={frame} overallPass={isPassed} />
@@ -467,7 +482,7 @@ export default function ResultPage({
           <button type="button" onClick={onDownloadBanner} className="result-footer-button h-10 rounded-full bg-black/[.04] px-4 text-[14px] outline-none transition-[background-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-white/80 active:translate-y-0 active:scale-95 focus-visible:ring-2 focus-visible:ring-black/15">
             下载banner
           </button>
-          <button type="button" onClick={onDownloadPreview} className="result-footer-button h-10 rounded-full bg-black/[.04] px-4 text-[14px] outline-none transition-[background-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-white/80 active:translate-y-0 active:scale-95 focus-visible:ring-2 focus-visible:ring-black/15">
+          <button type="button" onClick={() => onDownloadPreview(isBottom ? previewVariant : undefined)} className="result-footer-button h-10 rounded-full bg-black/[.04] px-4 text-[14px] outline-none transition-[background-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-white/80 active:translate-y-0 active:scale-95 focus-visible:ring-2 focus-visible:ring-black/15">
             下载预览
           </button>
         </div>
@@ -481,7 +496,7 @@ export default function ResultPage({
             className="flex h-8 items-center gap-1 rounded-full bg-black/[.04] pl-4 pr-3 font-['PingFang_SC'] text-[12px] outline-none transition-[background-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-black/[.07] active:translate-y-0 active:scale-95 focus-visible:ring-2 focus-visible:ring-black/15"
             onClick={() => onNeedsConfirmation?.('banner 类型下拉选项 Figma 未标注，等待你确认')}
           >
-            功能宣推
+            {isBottom ? 'Bottom banner' : '功能宣推'}
             <img src={FIGMA_ASSETS.chevronRight} alt="" className="size-[10px] rotate-90" />
           </button>
         </div>
@@ -520,7 +535,7 @@ export default function ResultPage({
           >
             导出报告
           </button>
-          {isPassed ? (
+          {isPassed || isBottom ? (
             <button type="button" onClick={onExportReport} className="h-10 rounded-full bg-black px-[14px] text-[14px] text-white outline-none transition-[background-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-black/85 active:translate-y-0 active:scale-95 focus-visible:ring-2 focus-visible:ring-black/20">
               导出检测报告
             </button>

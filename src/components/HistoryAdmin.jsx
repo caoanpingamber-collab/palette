@@ -8,7 +8,7 @@ import './HistoryAdmin.css'
 const formatTime = value => new Date(value).toLocaleString('zh-CN', { hour12: false })
 const formatBytes = bytes => bytes >= 1024 ** 3 ? `${(bytes / 1024 ** 3).toFixed(1)} GB` : bytes >= 1024 ** 2 ? `${(bytes / 1024 ** 2).toFixed(1)} MB` : `${Math.ceil(bytes / 1024)} KB`
 const Spinner = () => <LoaderCircle size={16} className="history-spin" aria-hidden="true" />
-const Status = ({ pass }) => <span className={`history-status ${pass ? 'is-pass' : 'is-fail'}`}>{pass ? '通过' : '不通过'}</span>
+const Status = ({ pass, status }) => <span className={`history-status ${status === 'review' || pass == null ? 'is-review' : pass ? 'is-pass' : 'is-fail'}`}>{status === 'review' || pass == null ? '需复核' : pass ? '通过' : '不通过'}</span>
 
 function Login({ onLogin, error, setError, onHome }) {
   const [pending, setPending] = useState(false)
@@ -48,7 +48,7 @@ function Detail({ record, onBack, onDelete, onError, ensureSession }) {
   const [exporting, setExporting] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const result = restoreResult(record, selected)
-  const frame = result.kind === 'video' ? result.frames[selected] : result.frame
+  const frame = result.kind === 'video' || result.animated ? result.frames[selected] : result.frame
   async function report() {
     setExporting(true)
     try { await ensureSession(); await exportReport({ result, frame, signal: lifecycle.current.signal }) } catch (failure) { if (failure.name !== 'AbortError') onError(failure.status ? failure : new Error(failure.message || '报告导出失败，请重试')) }
@@ -71,14 +71,14 @@ function Detail({ record, onBack, onDelete, onError, ensureSession }) {
   return (
     <section className="history-detail">
       <div className="history-detail-heading">
-        <div className="history-detail-name"><button className="history-icon" onClick={onBack} title="返回历史列表" aria-label="返回历史列表"><ArrowLeft size={20} /></button><h1 title={result.fileName}>{result.fileName}</h1><Status pass={result.overallPass} /></div>
+        <div className="history-detail-name"><button className="history-icon" onClick={onBack} title="返回历史列表" aria-label="返回历史列表"><ArrowLeft size={20} /></button><h1 title={result.fileName}>{result.fileName}</h1><Status pass={result.overallPass} status={result.overallStatus} /></div>
         <div className="history-actions">
           <a className="history-button" href={assetUrl(record.id, 'original', true)} download onClick={download} aria-disabled={downloading}>{downloading ? <Spinner /> : <Download size={16} />}下载原文件</a>
           <button className="history-button" onClick={report} disabled={exporting}>{exporting ? <Spinner /> : <Download size={16} />}导出报告</button>
           <button className="history-icon history-danger" onClick={() => onDelete(record)} aria-label="删除记录" title="删除记录"><Trash2 size={17} /></button>
         </div>
       </div>
-      <p className="history-meta">{formatTime(record.createdAt)} · {result.kind === 'video' ? 'MP4 视频' : '图片'} · {formatBytes(record.bytes)} · 匿名提交</p>
+      <p className="history-meta">{formatTime(record.createdAt)} · {result.inspectionType === 'bottom' ? 'Bottom Banner · ' : ''}{result.kind === 'video' ? 'MP4 视频' : result.animated ? 'GIF 动图（首尾抽样）' : '图片'} · {formatBytes(record.bytes)} · 匿名提交</p>
       <div className="history-detail-grid">
         <div className="history-media-pane">
           <div className="history-media">
@@ -86,14 +86,14 @@ function Detail({ record, onBack, onDelete, onError, ensureSession }) {
               ? <video src={result.videoUrl} poster={result.frames.first.src} controls autoPlay muted loop playsInline preload="metadata" onError={() => onError(new Error('原视频读取失败，请刷新或重新登录'))} aria-label="检测原视频" />
               : <img src={assetUrl(record.id, 'original')} alt="检测原图" onError={() => onError(new Error('原图读取失败，请刷新或重新登录'))} />}
           </div>
-          {result.kind === 'video' && <div className="history-frame-switch" role="group" aria-label="选择检测帧">
+          {(result.kind === 'video' || result.animated) && <div className="history-frame-switch" role="group" aria-label="选择检测帧">
             {['first', 'last'].map(key => <button type="button" key={key} className={selected === key ? 'is-selected' : ''} onClick={() => setSelected(key)} aria-pressed={selected === key}>
-              <img src={result.frames[key].src} alt="" /><span>{key === 'first' ? '首帧' : '尾帧'}</span><Status pass={result.frames[key].overallPass} />
+              <img src={result.frames[key].src} alt="" /><span>{key === 'first' ? '首帧' : '尾帧'}</span><Status pass={result.frames[key].overallPass} status={result.frames[key].overallStatus} />
             </button>)}
           </div>}
         </div>
         <div className="history-inspection">
-          <div className="history-section-heading"><h2>{result.kind === 'video' ? `${selected === 'first' ? '首帧' : '尾帧'}检测结果` : '检测结果'}</h2><span>{frame.width} × {frame.height}</span></div>
+          <div className="history-section-heading"><h2>{result.kind === 'video' || result.animated ? `${selected === 'first' ? '首帧' : '尾帧'}检测结果` : '检测结果'}</h2><span>{frame.width} × {frame.height}</span></div>
           {frame.uiChecks.map(item => <section key={item.key} className="history-check">
             <div className="history-check-title"><h3>{item.label}</h3><Status pass={item.status} /></div>
             {item.metrics ? item.metrics.map(metric => <div key={metric.label} className="history-metric"><span>{metric.label}</span><strong>{metric.value}</strong></div>) : <div className="history-metric"><span>{item.metricLabel}</span><strong>{item.metric}</strong></div>}
@@ -198,7 +198,7 @@ export default function HistoryAdmin({ onHome }) {
             <table className="history-table"><thead><tr><th>素材</th><th>检测状态</th><th>未通过项目</th><th>归档时间</th><th><span className="history-sr">操作</span></th></tr></thead>
               <tbody>{data?.records.map(record => <tr key={record.id}>
                 <td><div className="history-file"><img src={record.thumbnailUrl} alt="" loading="lazy" /><div><button onClick={() => open(record.id)} title={record.fileName}>{record.fileName}</button><span>{record.kind === 'video' ? <Film size={12} /> : <FileImage size={12} />}{record.kind === 'video' ? '视频' : '图片'} · {formatBytes(record.bytes)}</span></div></div></td>
-                <td><Status pass={record.overallPass} /></td><td className="history-issues">{record.issues.join('、') || '—'}</td><td className="history-time">{formatTime(record.createdAt)}</td>
+                <td><Status pass={record.overallPass} status={record.overallStatus} /></td><td className="history-issues">{record.issues.join('、') || '—'}</td><td className="history-time">{formatTime(record.createdAt)}</td>
                 <td><button className="history-icon" onClick={() => open(record.id)} aria-label={`查看 ${record.fileName}`} title="查看记录" disabled={opening === record.id}>{opening === record.id ? <Spinner /> : <ArrowUpRight size={18} />}</button></td>
               </tr>)}</tbody>
             </table>

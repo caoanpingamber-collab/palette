@@ -1,3 +1,5 @@
+import { BOTTOM_RULES } from './bottomRules.mjs'
+
 const RULES = {
   version: 'banner-qc-v1',
   thresholds: { coldLo: 160, coldHi: 270, coldMin: 60, chromaMin: 45, clutterMax: 8, titleContrast: 2, cardTopContrast: 2, cardBottomContrast: 1.2, compositionMinX: .5 },
@@ -45,6 +47,11 @@ export function historyApiPath(pathname, base = clientBase ?? import.meta.env?.V
 }
 
 function snapshotFrame(frame) {
+  if (frame.inspectionType === 'bottom') return {
+    inspectionType: 'bottom', width: frame.width, height: frame.height, layout: frame.layout,
+    uiChecks: structuredClone(frame.uiChecks), overallPass: frame.overallPass, overallStatus: frame.overallStatus,
+    recommendation: frame.recommendation, prompt: frame.prompt, evidence: structuredClone(frame.evidence),
+  }
   return {
     width: frame.width, height: frame.height,
     palette: (frame.palette || []).map(({ hex, rgb, ratio }) => ({ hex, rgb, ratio })),
@@ -56,6 +63,16 @@ function snapshotFrame(frame) {
 }
 
 export function snapshotResult(result, { id = crypto.randomUUID(), inspectedAt = new Date().toISOString() } = {}) {
+  if (result.inspectionType === 'bottom') {
+    const { width, height, maxBytes, titleOnlyMax, titleMax, subtitleMax, maxLines, circle } = BOTTOM_RULES
+    return {
+      version: 2, inspectionType: 'bottom', id, inspectedAt, kind: 'image', fileName: result.fileName,
+      animated: Boolean(result.animated), animationFrameCount: result.animationFrameCount || 1,
+      buildVersion: typeof __APP_BUILD_VERSION__ === 'undefined' ? 'development' : __APP_BUILD_VERSION__,
+      rules: { version: BOTTOM_RULES.version, thresholds: { width, height, maxBytes, titleOnlyMax, titleMax, subtitleMax, maxLines, circleX: circle.x, circleY: circle.y, circleDiameter: circle.diameter } },
+      result: { overallPass: result.overallPass, overallStatus: result.overallStatus, recommendation: result.recommendation, prompt: result.prompt, frames: { first: snapshotFrame(result.frames?.first || result.frame), ...(result.animated ? { last: snapshotFrame(result.frames.last) } : {}) } },
+    }
+  }
   const frames = result.kind === 'video' ? { first: snapshotFrame(result.frames.first), last: snapshotFrame(result.frames.last) } : { first: snapshotFrame(result.frame) }
   return {
     version: 1, id, inspectedAt, kind: result.kind, fileName: result.fileName,
@@ -100,12 +117,15 @@ export function releaseHistoryMedia(id) {
 
 export function restoreResult(record, selectedFrame = 'first') {
   const { snapshot, id } = record
-  const frames = Object.fromEntries(Object.entries(snapshot.result.frames).map(([key, saved]) => [key, { ...saved, src: assetUrl(id, key), failed: saved.uiChecks.filter(item => !item.status) }]))
-  const activeFrame = snapshot.kind === 'video' && frames[selectedFrame] ? selectedFrame : 'first'
+  const frames = Object.fromEntries(Object.entries(snapshot.result.frames).map(([key, saved]) => [key, { ...saved, palette: saved.palette || [], src: assetUrl(id, key), failed: saved.uiChecks.filter(item => item.status === false), review: saved.uiChecks.filter(item => item.status == null) }]))
+  const hasFrames = snapshot.kind === 'video' || snapshot.animated
+  const activeFrame = hasFrames && frames[selectedFrame] ? selectedFrame : 'first'
   const frame = frames[activeFrame]
   return {
     kind: snapshot.kind, fileName: snapshot.fileName, ...snapshot.result,
-    frames, frame: frames.first, activeFrame: snapshot.kind === 'video' ? activeFrame : null,
+    inspectionType: snapshot.inspectionType || 'header', animated: Boolean(snapshot.animated), animationFrameCount: snapshot.animationFrameCount,
+    frames, frame: frames.first, activeFrame: hasFrames ? activeFrame : null,
+    mediaUrl: snapshot.inspectionType === 'bottom' ? assetUrl(id, 'original') : null,
     sourceUrl: frame.src, videoUrl: snapshot.kind === 'video' ? assetUrl(id, 'original') : null,
     checks: frame.uiChecks, palette: frame.palette,
   }
@@ -155,18 +175,21 @@ async function raster(frame, maxEdge, quality) {
 
 export async function prepareArchive(file, result) {
   const manifest = snapshotResult(result)
-  const first = result.kind === 'video' ? result.frames.first : result.frame
+  const first = result.kind === 'video' || result.animated ? result.frames.first : result.frame
   const form = new FormData()
   form.append('manifest', JSON.stringify(manifest))
   form.append('original', file, file.name || result.fileName)
   form.append('first', await raster(first, 1600, .94), 'first.jpg')
-  if (result.kind === 'video') form.append('last', await raster(result.frames.last, 1600, .94), 'last.jpg')
+  if (result.kind === 'video' || result.animated) form.append('last', await raster(result.frames.last, 1600, .94), 'last.jpg')
   form.append('thumbnail', await raster(first, 240, .78), 'thumbnail.jpg')
   return { id: manifest.id, form }
 }
 
 export const archiveInspection = prepared => request('/api/history', { method: 'POST', body: prepared.form })
-export const isArchiveEnabled = async () => (await request('/api/health')).archiveEnabled === true
+export const isArchiveEnabled = async (version = 1) => {
+  const health = await request('/api/health')
+  return health.archiveEnabled === true && (version === 1 || health.snapshotVersions?.includes(version) === true)
+}
 export const getAdminSession = signal => request('/api/admin/session', { signal })
 export async function loginAdmin(username, password) {
   if (sessionTransport === 'bearer') clearHistorySession()
@@ -199,7 +222,7 @@ export async function getHistory(id, signal) {
   const recordEpoch = recordEpochs.get(id) || 0
   const record = await request(`/api/history/${encodeURIComponent(id)}`, { signal })
   if (sessionTransport === 'bearer' && recordEpoch !== (recordEpochs.get(id) || 0)) throw staleRequest()
-  if (sessionTransport === 'bearer') await Promise.all(['original', 'first', ...(record.snapshot.kind === 'video' ? ['last'] : [])].map(name => loadPrivateAsset(id, name, signal)))
+  if (sessionTransport === 'bearer') await Promise.all(['original', 'first', ...(record.snapshot.kind === 'video' || record.snapshot.animated ? ['last'] : [])].map(name => loadPrivateAsset(id, name, signal)))
   return record
 }
 export async function deleteHistory(id, csrfToken) {

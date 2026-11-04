@@ -118,7 +118,7 @@ export class HistoryStore {
     const records = rows.map(row => {
       const snapshot = JSON.parse(row.snapshot)
       const issues = [...new Set(Object.values(snapshot.result.frames).flatMap(frame => frame.uiChecks.filter(check => !check.status).map(check => check.issue)))]
-      return { id: row.id, fileName: row.file_name, kind: row.kind, overallPass: Boolean(row.passed), inspectedAt: row.inspected_at, createdAt: row.created_at, bytes: row.total_bytes, issues, thumbnailUrl: `/api/history/${row.id}/files/thumbnail` }
+      return { id: row.id, fileName: row.file_name, kind: row.kind, overallPass: Boolean(row.passed), overallStatus: snapshot.result.overallStatus, inspectionType: snapshot.inspectionType, inspectedAt: row.inspected_at, createdAt: row.created_at, bytes: row.total_bytes, issues, thumbnailUrl: `/api/history/${row.id}/files/thumbnail` }
     })
     return { records, total, page, pageSize, stats: this.stats() }
   }

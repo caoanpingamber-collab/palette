@@ -40,7 +40,7 @@ export function createApp({ store, archiveEnabled = false, allowedOrigins = [], 
     next()
   })
   app.use('/api/admin', express.json({ limit: '4kb', inflate: false }))
-  app.get('/api/health', (req, res) => res.json({ ready: true, archiveEnabled, storage: store.provider || 'local', adminAuth: sessionTransport }))
+  app.get('/api/health', (req, res) => res.json({ ready: true, archiveEnabled, storage: store.provider || 'local', adminAuth: sessionTransport, snapshotVersions: [1, 2] }))
   app.post('/api/admin/login', rateLimit({ max: 10, windowMs: 15 * 60 * 1000 }), auth.login)
   app.get('/api/admin/session', auth.authenticate, auth.session)
   app.post('/api/admin/logout', auth.authenticate, auth.csrf, auth.logout)

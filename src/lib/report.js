@@ -14,10 +14,10 @@ function rounded(ctx, x, y, w, h, r) {
 
 function pill(ctx, x, y, text, pass) {
   ctx.save()
-  ctx.fillStyle = pass ? 'rgba(0,174,112,.12)' : 'rgba(255,97,99,.12)'
-  rounded(ctx, x, y, pass ? 30 : 41, 18, 5)
+  ctx.fillStyle = pass == null ? 'rgba(194,138,21,.12)' : pass ? 'rgba(0,174,112,.12)' : 'rgba(255,97,99,.12)'
+  rounded(ctx, x, y, pass == null ? 41 : pass ? 30 : 41, 18, 5)
   ctx.fill()
-  ctx.fillStyle = pass ? '#00ae70' : '#ff3436'
+  ctx.fillStyle = pass == null ? '#986c0d' : pass ? '#00ae70' : '#ff3436'
   ctx.font = '500 11px "PingFang SC", sans-serif'
   ctx.textBaseline = 'middle'
   ctx.fillText(text, x + 4, y + 9)
@@ -179,6 +179,7 @@ function drawReportRows(ctx, frame, startY, includeDetails) {
 }
 
 export async function exportReport({ result, frame, signal }) {
+  if (result.inspectionType === 'bottom') return exportBottomReport({ result, frame, signal })
   signal?.throwIfAborted()
   if (document.fonts?.ready) await document.fonts.ready
   signal?.throwIfAborted()
@@ -252,4 +253,50 @@ export async function exportReport({ result, frame, signal }) {
   a.download = passed ? 'banner-report-approved.jpg' : 'banner-report-not-passed.jpg'
   a.click()
   window.setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+}
+
+function reportLines(ctx, value, width) {
+  const lines = []; let line = ''
+  for (const char of String(value || '')) {
+    if (line && ctx.measureText(line + char).width > width && !/^[，。；：！？、,.!?;:]$/.test(char)) { lines.push(line); line = char }
+    else line += char
+  }
+  if (line) lines.push(line)
+  return lines
+}
+
+async function exportBottomReport({ result, frame, signal }) {
+  signal?.throwIfAborted()
+  if (document.fonts?.ready) await document.fonts.ready
+  signal?.throwIfAborted()
+  const canvas = document.createElement('canvas'), ctx = canvas.getContext('2d')
+  ctx.font = '12px "PingFang SC", sans-serif'
+  const blocks = frame.uiChecks.map(item => ({ item, lines: reportLines(ctx, item.detail || item.recommendation, 296) }))
+  const advice = reportLines(ctx, result.recommendation, 320)
+  const startY = 154 + advice.length * 20
+  const H = startY + blocks.reduce((sum, block) => sum + 70 + block.lines.length * 18, 0) + 54
+  canvas.width = 408 * DPR; canvas.height = H * DPR; ctx.scale(DPR, DPR)
+  ctx.fillStyle = '#f1f1f1'; ctx.fillRect(0, 0, 408, H)
+  await drawLogo(ctx, 157, 18)
+  signal?.throwIfAborted()
+  ctx.fillStyle = '#fff'; ctx.fillRect(24, 60, 360, H - 84)
+  const title = result.overallStatus === 'passed' ? 'Approved' : result.overallStatus === 'review' ? 'Needs Review' : 'Not Passed'
+  text(ctx, title, 44, 80, { color: '#000', font: 'italic 700 20px "Floane", serif' })
+  text(ctx, `Bottom Banner · ${result.animated ? `${result.activeFrame === 'last' ? '尾帧' : '首帧'}（首尾抽样）` : '静态素材'} · 规则 bottom-banner-qc-v1`, 44, 111, { alpha: .5, font: '11px "PingFang SC", sans-serif' })
+  advice.forEach((line, index) => text(ctx, line, 44, 136 + index * 20, { alpha: .7 }))
+  let y = startY
+  for (const { item, lines } of blocks) {
+    text(ctx, item.label, 44, y, { alpha: .5 })
+    pill(ctx, 162, y - 1, item.status == null ? '需复核' : item.status ? '通过' : '不通过', item.status)
+    text(ctx, item.metricLabel, 44, y + 27, { alpha: .65 })
+    ctx.save(); ctx.textAlign = 'right'; text(ctx, item.metric, 340, y + 26, { color: '#000', font: '700 14px "Floane", serif' }); ctx.restore()
+    lines.forEach((line, index) => text(ctx, line, 44, y + 52 + index * 18, { alpha: .6, font: '11px "PingFang SC", sans-serif' }))
+    y += 70 + lines.length * 18
+    ctx.strokeStyle = 'rgba(0,0,0,.08)'; ctx.beginPath(); ctx.moveTo(44, y - 9); ctx.lineTo(340, y - 9); ctx.stroke()
+  }
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', .92))
+  signal?.throwIfAborted()
+  if (!blob) throw new Error('报告导出失败')
+  const url = URL.createObjectURL(blob), anchor = document.createElement('a')
+  anchor.href = url; anchor.download = `bottom-banner-report-${result.overallStatus}.jpg`; anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 1000)
 }

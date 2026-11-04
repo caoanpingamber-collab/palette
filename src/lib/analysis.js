@@ -142,7 +142,7 @@ export function buildFrameResult({ img, src, data, check }) {
 
 export function currentFrame(result) {
   if (!result) return null
-  if (result.kind === 'video') return result.frames?.[result.activeFrame || 'first'] || null
+  if (result.kind === 'video' || result.animated) return result.frames?.[result.activeFrame || 'first'] || null
   return result.frame || null
 }
 
