@@ -22,12 +22,17 @@ async function withOcrWorker(task, signal) {
   const timeout = setTimeout(() => controller.abort(new DOMException('文字识别超时，请人工复核', 'TimeoutError')), 25000)
   const token = crypto.randomUUID()
   const channel = new BroadcastChannel(`bottom-ocr-${token}`)
-  let worker, disposed = false
+  let worker, bootstrapUrl, disposed = false
   try {
     const { createWorker } = await import('tesseract.js')
     checkAbort(controller.signal)
+    const response = await fetch(`${localUrl('ocr/controlled-worker.js')}?job=${token}`, { signal: controller.signal, credentials: 'omit' })
+    if (!response.ok || !/javascript|ecmascript/i.test(response.headers.get('content-type') || '')) throw new Error('文字识别启动脚本加载失败')
+    const source = await abortable(response.text(), controller.signal)
+    const options = JSON.stringify({ job: token, script: localUrl('ocr/worker.min.js') })
+    bootstrapUrl = URL.createObjectURL(new Blob([`self.__bottomOcr=${options};\n`, source], { type: 'application/javascript' }))
     const pending = createWorker('eng', 1, {
-      workerPath: `${localUrl('ocr/controlled-worker.js')}?job=${token}`, corePath: localUrl('ocr'), langPath: localUrl('ocr'),
+      workerPath: bootstrapUrl, corePath: localUrl('ocr'), langPath: localUrl('ocr'),
       workerBlobURL: false, cacheMethod: 'none', logger: () => {},
       errorHandler: () => controller.abort(new Error('文字识别加载失败，请人工复核')),
     }).then(value => { if (disposed) void value.terminate(); else worker = value; return value })
@@ -38,6 +43,7 @@ async function withOcrWorker(task, signal) {
     disposed = true; clearTimeout(timeout); signal?.removeEventListener('abort', abort)
     channel.postMessage('close'); channel.close()
     if (worker) await worker.terminate()
+    if (bootstrapUrl) URL.revokeObjectURL(bootstrapUrl)
   }
 }
 

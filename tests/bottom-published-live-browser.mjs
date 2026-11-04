@@ -9,8 +9,9 @@ import { bottomGif } from './bottom-fixtures.mjs'
 if (process.env.RUN_BOTTOM_PUBLISHED !== '1') throw new Error('Explicit RUN_BOTTOM_PUBLISHED=1 is required; writes synthetic online records')
 const appId = process.env.HISTORY_MIAODA_APP_ID
 const homeUrl = process.env.HISTORY_PUBLISHED_URL
-if (!/^app_[a-z0-9]+$/.test(appId || '') || !/^https:\/\/bytedance\.feishu\.link\/app\/app_[a-z0-9]+$/.test(homeUrl || '')) throw new Error('Specify the approved backend and published frontend')
+if (!/^app_[a-z0-9]+$/.test(appId || '') || !/^https:\/\/bytedance\.(feishu\.link|feishuapp\.com)\/app\/app_[a-z0-9]+$/.test(homeUrl || '')) throw new Error('Specify the approved backend and published frontend')
 const apiBase = `https://bytedance.feishu.link/app/${appId}`
+const uploadBase = `${new URL(homeUrl).origin}/app/${appId}`
 const repository = new MiaodaRepository(new MiaodaSql({ appId, env: 'online' }))
 const token = randomBytes(32).toString('hex'), csrf = randomBytes(32).toString('hex')
 const prefix = `bottom-published-synthetic-${randomUUID()}`
@@ -26,7 +27,11 @@ try {
   const context = await browser.newContext({ viewport: { width: 1440, height: 960 }, acceptDownloads: true })
   context.setDefaultTimeout(45000)
   const page = await context.newPage()
-  await page.goto(homeUrl, { waitUntil: 'networkidle', timeout: 60000 })
+  page.on('console', message => { if (['error', 'warning'].includes(message.type())) console.log(JSON.stringify({ browser: message.type(), message: message.text().slice(0, 700) })) })
+  page.on('pageerror', error => console.log(JSON.stringify({ pageError: error.message })))
+  page.on('requestfailed', request => console.log(JSON.stringify({ failedResource: request.url().split('?')[0], error: request.failure()?.errorText })))
+  page.on('response', response => { if (response.status() >= 400) console.log(JSON.stringify({ responseError: response.url().split('?')[0], status: response.status() })) })
+  await page.goto(homeUrl, { waitUntil: 'domcontentloaded', timeout: 60000 })
   await expect(page.locator('.home-bg-star')).toHaveCount(0)
   await page.getByRole('button', { name: 'Bottom banner', exact: true }).click()
   const png = await page.evaluate(() => {
@@ -39,11 +44,13 @@ try {
     return canvas.toDataURL().split(',')[1]
   })
   async function upload(file) {
-    const saved = page.waitForResponse(response => response.url() === `${apiBase}/api/history` && response.request().method() === 'POST', { timeout: 90000 })
+    console.log(JSON.stringify({ stage: 'upload', kind: file.mimeType }))
+    const saved = page.waitForResponse(response => response.url() === `${uploadBase}/api/history` && response.request().method() === 'POST', { timeout: 90000 })
     await page.locator('input[type=file]').setInputFiles(file)
     const response = await saved
     assert.equal(response.status(), 201)
     const { id } = await response.json(); ids.add(id)
+    console.log(JSON.stringify({ stage: 'archived', kind: file.mimeType }))
     return id
   }
   const pngId = await upload({ name: `${prefix}.png`, mimeType: 'image/png', buffer: Buffer.from(png, 'base64') })
@@ -75,7 +82,7 @@ try {
   assert.equal(savedGif.manifest.result.frames.first.uiChecks.find(row => row.key === 'composition').status, true)
   assert.equal(savedGif.manifest.result.frames.last.uiChecks.find(row => row.key === 'composition').status, false)
   assert.equal((await fetch(`${apiBase}/api/history/${gifId}/files/original`)).status, 401)
-  const adminResponse = await page.goto(`${apiBase}/admin`, { waitUntil: 'networkidle' })
+  const adminResponse = await page.goto(`${apiBase}/admin`, { waitUntil: 'domcontentloaded' })
   assert.match(adminResponse.headers()['content-security-policy'], /sandbox allow-scripts allow-forms allow-downloads/)
   assert.equal(await page.evaluate(() => window.origin), 'null')
   // Use a short operator-created test session; never read or reset the real password.

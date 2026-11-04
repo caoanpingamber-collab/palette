@@ -14,6 +14,8 @@ const colorPath = path.resolve('src/lib/color.js')
 const approvedColorHash = '2c2c789100728bcd98170e0f76be987eb1b6f96541d733c6323bb79b71f310ff'
 
 export default mergeConfig(base, {
+  // Relative lazy-chunk requests on the HTML host's redirected CDN are denied.
+  build: { rollupOptions: { output: { codeSplitting: false } } },
   plugins: [{
     name: 'publish-confirmed-modules-only', enforce: 'pre',
     load(id) {

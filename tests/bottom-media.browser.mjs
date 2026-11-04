@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { createServer } from 'node:http'
 import { bottomGif, transparentDisposalGif, partialFirstGif } from './bottom-fixtures.mjs'
 
 test('Bottom local OCR reads real text with coordinates and no external requests', async ({ page }) => {
@@ -53,6 +54,27 @@ test('transparent rounded banner separates two-line copy from overlapping artwor
   expect(result.ocr.confidence).toBeGreaterThan(90)
   expect(result.checks.map(row => row.status)).toEqual([true, true, true])
   expect(result.checks[0].metric).toBe('44/57')
+})
+
+test('OCR initialization survives a same-origin worker URL redirecting to the platform CDN', async ({ page }) => {
+  const bootstrap = readFileSync(new URL('../public/ocr/controlled-worker.js', import.meta.url), 'utf8')
+  const cdn = createServer((req, res) => { res.writeHead(200, { 'Content-Type': 'application/javascript', 'Access-Control-Allow-Origin': '*' }); res.end(bootstrap) })
+  await new Promise(resolve => cdn.listen(0, '127.0.0.1', resolve))
+  try {
+  await page.route('**/ocr/controlled-worker.js?*', route => route.fulfill({ status: 302, headers: { Location: `http://127.0.0.1:${cdn.address().port}/bootstrap.js` } }))
+  await page.goto('/')
+  const result = await page.evaluate(async () => {
+    const { recognizeBottomText } = await import('/src/lib/bottomMedia.js')
+    const canvas = document.createElement('canvas'); canvas.width = 1071; canvas.height = 180
+    const ctx = canvas.getContext('2d'); ctx.fillStyle = '#621fb7'; ctx.fillRect(0, 0, 1071, 180)
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 48px Arial'; ctx.fillText('Create your next video', 90, 82)
+    try { const ocr = await recognizeBottomText(canvas); return { text: ocr.lines.map(line => line.text).join(' '), confidence: ocr.confidence } }
+    catch (error) { return { text: '', confidence: 0, error: String(error) } }
+  })
+  expect(result.error).toBeUndefined()
+  expect(result.text).toBe('Create your next video')
+  expect(result.confidence).toBeGreaterThan(70)
+  } finally { await new Promise(resolve => cdn.close(resolve)) }
 })
 
 test('GIF decoder returns distinct composited first/last images without changing playback source', async ({ page }) => {
