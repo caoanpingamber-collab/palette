@@ -26,3 +26,10 @@ Native local build retains existing non-blocking optional route-generator404/cop
 - Latest Header live browser regression passed image/video anonymous archive and online independent readback, private Blob media/download/report, continuously playing video with first/last results, invalid-password and Cookie-only denial, logout revocation, same-host window/service-worker isolation and frontend `/admin` redirect. One prior video archive attempt returned409; a diagnostic rerun passed, so no unsupported automatic retry or quota/permission relaxation was added.
 - Fresh final local rerun: 78/78 unit/API and 32/32 browser tests passed; frontend build passed. Existing GSAP empty-target/readback warnings remain non-blocking.
 - Synthetic cleanup completed. Independent online query restricted to the exact Bottom/Header browser-test filename prefixes returned no remaining records. Real user records and existing administrator credentials were left intact.
+
+## Follow-up Shared Phone Template Publication
+
+- User explicitly requested publication after accepting the local shared Header/Bottom phone template. Source `7c3c3aa` pushed to GitHub main; static artifact `bottom-7c3c3aa` published to the same frontend app through official HTML publication.
+- Fresh verification: 78 unit/API tests, 34 browser tests and the clean one-entry publish build passed. Actual published page has the expected marker and shared phone chrome, and both full/circular preview downloads succeeded.
+- Native backend and administrator credentials were not changed or republished. No new resource/domain/provider/paid plan.
+- Current backend health is503, independently of this frontend change. A read-only storage probe for an existing deleting record's prefix returned three out-of-scope paths. The existing safety guard rejected cleanup; no listed objects or unknown records were deleted. The startup recovery failure prevents current cloud history acceptance. Frontend inspection/export remains non-blocking; do not claim current online cloud archival is working based on earlier successful runs. Separate approval for backend remediation was requested.
