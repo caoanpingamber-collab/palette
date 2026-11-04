@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { HttpClient } from '@lark-apaas/http-client'
 import { FileService } from '@lark-apaas/file-service'
 import { HttpError } from './errors.mjs'
+import { removeArchivePrefix } from './private-objects.mjs'
 
 export class MiaodaSql {
   constructor({ appId, env = 'dev', executable = 'lark-cli' }) {
@@ -79,10 +80,10 @@ export async function miaodaObjects({ appId, envFile }) {
       await currentFiles().remove({ appId, bucketId, filePaths: values.map(meta => meta.filePath) })
     },
     async removePrefix(prefix) {
-      if (!/^banner-history\/[\da-f-]{36}\/[\da-f-]{36}\/$/i.test(prefix)) throw new Error('Refusing to clean an unrelated object prefix')
-      const values = await currentFiles().list({ appId, bucketId, prefix, searchOptions: { maxKeys: 100 } })
-      if (values.hasMore || values.attachments.some(meta => !available(meta) || !meta.filePath.startsWith(prefix))) throw new Error('Cloud cleanup exceeds the expected archive scope')
-      if (values.attachments.length) await currentFiles().remove({ appId, bucketId, filePaths: values.attachments.map(meta => meta.filePath) })
+      await removeArchivePrefix({
+        remove: filePaths => currentFiles().remove({ appId, bucketId, filePaths }),
+        getFileMetadata: filePath => currentFiles().getFileMetadata({ appId, bucketId, filePath }),
+      }, prefix)
     },
   }
 }
