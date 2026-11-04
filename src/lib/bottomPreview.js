@@ -9,12 +9,12 @@ export const BOTTOM_CARDS = [{ x: 15.26718, width: 211.83206, icon: 'new', label
 
 const image = async src => {
   if (/\.svg$/.test(src)) {
-    const response = await fetch(src, { redirect: 'error' })
+    const response = await fetch(src, { credentials: 'omit' })
     if (!response.ok) throw new Error('预览图标读取失败')
     // A data source keeps SVG foreignObject content origin-clean for canvas export.
     src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(await response.text())}`
   }
-  return new Promise((resolve, reject) => { const img = new Image(); img.onload = () => resolve(img); img.onerror = () => reject(new Error('预览素材读取失败')); img.src = src })
+  return new Promise((resolve, reject) => { const img = new Image(); img.crossOrigin = 'anonymous'; img.onload = () => resolve(img); img.onerror = () => reject(new Error('预览素材读取失败')); img.src = src })
 }
 
 export async function downloadBottomPreview(frame, variant = 'full') {
