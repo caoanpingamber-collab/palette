@@ -1,11 +1,8 @@
+import { PHONE_ASSETS, PHONE_CARDS, PHONE_COPY, phoneTint } from './phonePreview'
+
 const asset = name => `${import.meta.env.BASE_URL}figma-assets/bottom/${name}.png`
-export const BOTTOM_LAYERS = [
-  { name: 'header', y: 0, height: 607.5 }, { name: 'projects', y: 348.28244, height: 95.41985 },
-  { name: 'tools', y: 443.7023, height: 370 }, { name: 'nav', y: 733.77869, height: 79.19847 },
-]
+export const BOTTOM_PHONE = { tint: [190, 202, 255] }
 export const bottomLayerUrl = (name, variant) => asset(name === 'tools' && variant === 'thumbnail' ? 'tools-thumbnail' : name)
-export const bottomIconUrl = name => `${import.meta.env.BASE_URL}figma-assets/bottom/${name}.svg`
-export const BOTTOM_CARDS = [{ x: 15.26718, width: 211.83206, icon: 'new', label: 'New video' }, { x: 234.73283, width: 125, icon: 'image', label: 'Edit photo' }]
 
 const image = async src => {
   if (/\.svg$/.test(src)) {
@@ -17,31 +14,58 @@ const image = async src => {
   return new Promise((resolve, reject) => { const img = new Image(); img.crossOrigin = 'anonymous'; img.onload = () => resolve(img); img.onerror = () => reject(new Error('预览素材读取失败')); img.src = src })
 }
 
+async function drawHomePhone(ctx) {
+  await Promise.all([
+    document.fonts.load('700 14px "CapCut Sans Text"'),
+    document.fonts.load('700 22px "CapCut Sans Display"'),
+    document.fonts.load('500 16px "CapCut Sans Text"'),
+  ])
+  const [poster, lower, status, tools, navigation, ...icons] = await Promise.all([
+    bottomLayerUrl('header'), PHONE_ASSETS.lower, PHONE_ASSETS.status, PHONE_ASSETS.tools, PHONE_ASSETS.navigation,
+    ...PHONE_CARDS.map(card => card.icon),
+  ].map(image))
+  ctx.save(); ctx.scale(375 / 393, 375 / 393)
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, 393, 852)
+  ctx.save(); ctx.beginPath(); ctx.rect(0, 0, 393, 637); ctx.clip()
+  const fit = Math.max(393 / poster.naturalWidth, 636 / poster.naturalHeight)
+  ctx.drawImage(poster, (393 - poster.naturalWidth * fit) / 2, (636 - poster.naturalHeight * fit) / 2, poster.naturalWidth * fit, poster.naturalHeight * fit)
+  const blur = document.createElement('canvas'); blur.width = 786; blur.height = 1272
+  const blurCtx = blur.getContext('2d'), scale = Math.max(786 / poster.naturalWidth, 1272 / poster.naturalHeight) * 1.2
+  blurCtx.filter = 'blur(70px)'
+  blurCtx.drawImage(poster, (786 - poster.naturalWidth * scale) / 2, (1272 - poster.naturalHeight * scale) / 2, poster.naturalWidth * scale, poster.naturalHeight * scale)
+  blurCtx.filter = 'none'; blurCtx.fillStyle = 'rgba(0,0,0,.12)'; blurCtx.fillRect(0, 0, 786, 1272)
+  const blurMask = blurCtx.createLinearGradient(0, 392, 0, 496)
+  blurMask.addColorStop(0, 'transparent'); blurMask.addColorStop(1, '#000')
+  blurCtx.globalCompositeOperation = 'destination-in'; blurCtx.fillStyle = blurMask; blurCtx.fillRect(0, 0, 786, 1272)
+  ctx.drawImage(blur, 0, -5.2, 393, 636)
+  const fade = ctx.createLinearGradient(0, 0, 0, 637)
+  for (const [offset, color] of [[.39446, 'rgba(255,255,255,0)'], [.50937, 'rgba(255,255,255,.48)'], [.58776, 'rgba(255,255,255,.76)'], [.66176, '#fff']]) fade.addColorStop(offset, color)
+  ctx.fillStyle = fade; ctx.fillRect(0, 0, 393, 637); ctx.restore()
+  ctx.drawImage(lower, 0, 365, 393, 487)
+  ctx.textBaseline = 'top'; ctx.textAlign = 'left'; ctx.fillStyle = 'rgba(255,255,255,.8)'
+  ctx.font = '700 14px "CapCut Sans Text", sans-serif'; ctx.fillText(PHONE_COPY.subtitle, 18, 191)
+  ctx.fillStyle = '#fff'; ctx.font = '700 22px "CapCut Sans Display", sans-serif'; ctx.fillText(PHONE_COPY.title, 18, 211)
+  const arrowX = 22 + ctx.measureText(PHONE_COPY.title).width
+  ctx.fillStyle = 'rgba(255,255,255,.2)'; ctx.beginPath(); ctx.roundRect(arrowX, 211.95, 14, 20, 4); ctx.fill()
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(arrowX + 5.4, 218.4); ctx.lineTo(arrowX + 8.3, 221.95); ctx.lineTo(arrowX + 5.4, 225.5); ctx.stroke()
+  const tint = `rgba(${phoneTint(BOTTOM_PHONE.tint).join(',')},.8)`
+  for (const [index, card] of PHONE_CARDS.entries()) {
+    ctx.beginPath(); ctx.roundRect(card.left, 253, card.width, 112, 12); ctx.fillStyle = tint; ctx.fill()
+    const gradient = ctx.createLinearGradient(0, 253, 0, 365); gradient.addColorStop(0, tint); gradient.addColorStop(1, 'rgba(255,255,255,.75)')
+    ctx.fillStyle = gradient; ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.fill()
+    ctx.drawImage(icons[index], card.left + card.width / 2 - 14, 283, 28, 28)
+    ctx.fillStyle = '#090c14'; ctx.textAlign = 'center'; ctx.font = '500 16px "CapCut Sans Text", sans-serif'; ctx.fillText(card.label, card.left + card.width / 2, 315)
+  }
+  ctx.drawImage(status, 0, 0, 393, 393 * status.naturalHeight / status.naturalWidth)
+  ctx.drawImage(tools, 0, 365, 393, 393 * tools.naturalHeight / tools.naturalWidth)
+  ctx.drawImage(navigation, 0, 0, 393, 98)
+  ctx.restore()
+}
+
 export async function downloadBottomPreview(frame, variant = 'full') {
   const canvas = document.createElement('canvas'); canvas.width = 750; canvas.height = 1626
   const ctx = canvas.getContext('2d'); ctx.scale(2, 2)
-  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, 375, 813)
-  const layers = await Promise.all(BOTTOM_LAYERS.map(layer => image(bottomLayerUrl(layer.name, variant))))
-  layers.forEach((img, index) => { const layer = BOTTOM_LAYERS[index]; ctx.drawImage(img, 0, layer.y, 375, layer.height) })
-  const names = ['cellular', 'wifi', 'cap', 'svip', 'standard', 'search', 'chevron', 'new', 'image']
-  const icons = Object.fromEntries(await Promise.all(names.map(async name => [name, await image(bottomIconUrl(name))])))
-  ctx.fillStyle = '#fff'; ctx.font = '600 16.22px "SF Pro", system-ui'; ctx.textBaseline = 'top'; ctx.textAlign = 'center'; ctx.fillText('9:41', 67.17, 17.5); ctx.textAlign = 'left'
-  ctx.drawImage(icons.cellular, 275.5, 22.45); ctx.drawImage(icons.wifi, 301, 22.55); ctx.drawImage(icons.cap, 350, 26.5)
-  ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = .954; ctx.beginPath(); ctx.roundRect(323.5, 21.8, 23.855, 12.4, 4.103); ctx.stroke()
-  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.roundRect(325.4, 23.7, 20.038, 8.6, 2.385); ctx.fill()
-  ctx.fillStyle = 'rgba(0,0,0,.2)'; ctx.beginPath(); ctx.roundRect(15.267, 59.16, 104.6, 26.718, 22.9); ctx.fill()
-  ctx.drawImage(icons.svip, 26.718, 63.93); ctx.drawImage(icons.standard, 47.114, 67.956)
-  ctx.beginPath(); ctx.arc(344.466, 74.427, 15.267, 0, Math.PI * 2); ctx.fill(); ctx.drawImage(icons.search, 335.878, 65.839)
-  ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.font = '700 13.36px "CapCut Sans Text", sans-serif'; ctx.fillText('Bilingual captions', 17.176, 180.343)
-  ctx.fillStyle = '#fff'; ctx.font = '700 20.03px "CapCut Sans Display", sans-serif'; ctx.fillText('AI bilingual captions', 17.176, 201.5)
-  ctx.drawImage(icons.chevron, 218, 204)
-  for (const card of BOTTOM_CARDS) {
-    const gradient = ctx.createLinearGradient(0, 236.702, 0, 347.389); gradient.addColorStop(0, 'rgba(190,202,255,.8)'); gradient.addColorStop(1, 'rgba(255,255,255,.75)')
-    ctx.fillStyle = gradient; ctx.beginPath(); ctx.roundRect(card.x, 236.702, card.width, 110.687, 11.45); ctx.fill()
-    ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.fill()
-    ctx.drawImage(icons[card.icon], card.x + card.width / 2 - 13.3588, 266.778)
-    ctx.fillStyle = '#090c14'; ctx.textAlign = 'center'; ctx.font = '500 15.267px "CapCut Sans Text", sans-serif'; ctx.fillText(card.label, card.x + card.width / 2, 297.31); ctx.textAlign = 'left'
-  }
+  await drawHomePhone(ctx)
   const original = frame.img?.naturalWidth ? frame.img : await image(frame.src)
   ctx.save()
   if (variant === 'thumbnail') {
